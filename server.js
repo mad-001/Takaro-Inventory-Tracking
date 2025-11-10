@@ -291,6 +291,88 @@ app.get('/api/tracking/player-inventory-history', requireAuth, async (req, res) 
     }
 });
 
+// Search endpoint - combines radius search with inventory data
+app.post('/api/search', requireAuth, async (req, res) => {
+    try {
+        const { centerX, centerZ, radius, gameServerId, startDate, endDate } = req.body;
+
+        const ts = new Date().toISOString();
+        console.log(`[${ts}] Combined search: server=${gameServerId}, center=(${centerX},${centerZ}), radius=${radius}`);
+
+        // Step 1: Get players in radius
+        const radiusResponse = await axios.get(`${TAKARO_API}/tracking/radius-players`, {
+            params: {
+                gameserverId: gameServerId,
+                x: centerX,
+                y: 0, // Using 0 for Y since we're doing 2D search
+                z: centerZ,
+                radius: radius,
+                startDate: startDate,
+                endDate: endDate
+            },
+            headers: {
+                'Authorization': `Bearer ${req.takaroToken}`,
+                'Accept': 'application/json'
+            },
+            timeout: 30000
+        });
+
+        const playersInRadius = radiusResponse.data?.data || [];
+        console.log(`[${ts}] Found ${playersInRadius.length} players in radius`);
+
+        if (playersInRadius.length === 0) {
+            return res.json([]);
+        }
+
+        // Step 2: Get inventory history for each player
+        const inventoryPromises = playersInRadius.map(async (player) => {
+            try {
+                const invResponse = await axios.get(`${TAKARO_API}/tracking/player-inventory-history`, {
+                    params: {
+                        playerId: player.playerId,
+                        startDate: startDate,
+                        endDate: endDate
+                    },
+                    headers: {
+                        'Authorization': `Bearer ${req.takaroToken}`,
+                        'Accept': 'application/json'
+                    },
+                    timeout: 30000
+                });
+
+                const inventoryData = invResponse.data?.data || [];
+                
+                // Transform inventory data to include player name
+                return inventoryData.map(item => ({
+                    playerId: player.playerId,
+                    playerName: player.playerName || 'Unknown',
+                    itemName: item.itemName || item.itemCode || 'Unknown',
+                    itemCode: item.itemCode,
+                    quantity: item.quantity || item.amount || 0,
+                    lastSeen: item.timestamp || item.createdAt || new Date().toISOString()
+                }));
+            } catch (invError) {
+                console.error(`[${ts}] Failed to get inventory for player ${player.playerId}:`, invError.message);
+                return [];
+            }
+        });
+
+        const allInventories = await Promise.all(inventoryPromises);
+        const flattenedResults = allInventories.flat();
+
+        console.log(`[${ts}] Returning ${flattenedResults.length} inventory records`);
+        res.json(flattenedResults);
+
+    } catch (error) {
+        console.error('Error in combined search:', error.message);
+        res.status(error.response?.status || 500).json({
+            error: true,
+            message: error.message,
+            details: error.response?.data
+        });
+    }
+});
+
 // Serve login page
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
