@@ -291,6 +291,11 @@ app.get('/api/tracking/player-inventory-history', requireAuth, async (req, res) 
     }
 });
 
+// Serve login page
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
 // Serve frontend
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -308,3 +313,5 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`✓ Login: Email + Password -> Bearer Token`);
     console.log('='.repeat(60));
 });
+
+
