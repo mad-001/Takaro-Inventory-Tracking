@@ -2,3 +2,7 @@
 *.log
 *.tmp
 .env
+
+# Backup files
+*.backup
+*.old

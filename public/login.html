@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -26,7 +26,7 @@
             border: 1px solid #2a2a30;
             padding: 40px;
             border-radius: 8px;
-            max-width: 400px;
+            max-width: 450px;
             width: 100%;
         }
 
@@ -41,8 +41,43 @@
         .subtitle {
             color: #9ca3af;
             text-align: center;
-            margin-bottom: 32px;
+            margin-bottom: 24px;
             font-size: 14px;
+        }
+
+        .info-box {
+            background: #0f0f14;
+            border: 1px solid #2a2a30;
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+
+        .info-box h3 {
+            color: #8b5cf6;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .info-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .info-box li {
+            color: #9ca3af;
+            font-size: 13px;
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .info-box li:before {
+            content: "•";
+            position: absolute;
+            left: 8px;
+            color: #8b5cf6;
         }
 
         .form-group {
@@ -100,6 +135,11 @@
             transform: scale(0.98);
         }
 
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .error-message {
             background: #1a1a1f;
             border: 1px solid #ef4444;
@@ -110,12 +150,28 @@
             font-size: 14px;
             display: none;
         }
+
+        .loading-text {
+            display: none;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 13px;
+            margin-top: 8px;
+        }
     </style>
 </head>
 <body>
     <div class="login-container">
         <h1>Takaro Inventory Tracker</h1>
         <p class="subtitle">Sign in with your Takaro credentials</p>
+        
+        <div class="info-box">
+            <h3>Login Options:</h3>
+            <ul>
+                <li><strong>Email + Password:</strong> Your Takaro account credentials</li>
+                <li><strong>Email + API Token:</strong> Enter your Takaro API token in the password field</li>
+            </ul>
+        </div>
         
         <div id="errorMessage" class="error-message"></div>
         
@@ -126,11 +182,12 @@
             </div>
             
             <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" placeholder="Enter your password" required>
+                <label for="password">Password / API Token</label>
+                <input type="password" id="password" name="password" placeholder="Enter your password or API token" required>
             </div>
             
-            <button type="submit">Sign In</button>
+            <button type="submit" id="loginBtn">Sign In</button>
+            <div class="loading-text" id="loadingText">Validating credentials with Takaro...</div>
         </form>
     </div>
 
@@ -141,6 +198,14 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const errorDiv = document.getElementById('errorMessage');
+            const loginBtn = document.getElementById('loginBtn');
+            const loadingText = document.getElementById('loadingText');
+            
+            // Show loading state
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Signing in...';
+            loadingText.style.display = 'block';
+            errorDiv.style.display = 'none';
             
             try {
                 const response = await fetch('/api/login', {
@@ -155,17 +220,25 @@
                 
                 if (data.success) {
                     localStorage.setItem('sessionId', data.sessionId);
-                    window.location.href = 'index.html';
+                    loginBtn.textContent = 'Success\! Redirecting...';
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 500);
                 } else {
-                    errorDiv.textContent = data.message || 'Login failed';
+                    errorDiv.textContent = data.message || data.details || 'Login failed';
                     errorDiv.style.display = 'block';
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = 'Sign In';
+                    loadingText.style.display = 'none';
                 }
             } catch (error) {
-                errorDiv.textContent = 'Connection error. Please try again.';
+                errorDiv.textContent = 'Connection error. Please check if the server is running.';
                 errorDiv.style.display = 'block';
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Sign In';
+                loadingText.style.display = 'none';
             }
         });
     </script>
 </body>
 </html>
-
