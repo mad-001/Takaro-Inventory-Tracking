@@ -1,0 +1,17 @@
+{
+  "name": "takaro-inventory-tracker",
+  "version": "1.0.0",
+  "description": "Web-based inventory tracking for Takaro game servers",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "cors": "^2.8.5"
+  },
+  "keywords": ["takaro", "inventory", "tracking"],
+  "author": "",
+  "license": "MIT"
+}
