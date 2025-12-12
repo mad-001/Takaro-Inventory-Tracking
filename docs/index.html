@@ -1,0 +1,305 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Takaro Inventory Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #e0e0e0;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 50%, #2d1b69 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(30, 30, 30, 0.95);
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 {
+            color: #a855f7;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            padding-bottom: 20px;
+            border-bottom: 2px solid #6366f1;
+        }
+
+        .subtitle {
+            color: #9ca3af;
+            font-size: 1.2em;
+            margin-bottom: 30px;
+        }
+
+        .download-section {
+            background: #2a2a2a;
+            border-left: 4px solid #a855f7;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 5px;
+        }
+
+        .download-btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(168, 85, 247, 0.3);
+            margin: 10px 10px 10px 0;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.5);
+        }
+
+        .info-box {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .info-box h2 {
+            color: #a855f7;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .info-box h3 {
+            color: #6366f1;
+            margin-top: 15px;
+            margin-bottom: 10px;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .feature-item {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 3px solid #6366f1;
+            transition: all 0.3s;
+        }
+
+        .feature-item:hover {
+            transform: translateX(5px);
+            border-left-color: #a855f7;
+        }
+
+        .feature-item strong {
+            color: #a855f7;
+        }
+
+        ol, ul {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        code {
+            background: #1a1a1a;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #a855f7;
+            font-family: 'Courier New', monospace;
+        }
+
+        .warning {
+            background: #2a2a2a;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .warning strong {
+            color: #f59e0b;
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2em;
+            }
+            .container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Takaro Inventory Tracker</h1>
+        <p class="subtitle">Track player inventory changes and detect theft on your Takaro game servers</p>
+
+        <div class="download-section">
+            <h2 style="color: #a855f7; margin-bottom: 15px;">≡ƒôª Download Latest Version</h2>
+            <p style="margin-bottom: 15px;">Current Version: <strong style="color: #6366f1;">v1.0.1</strong></p>
+            <a href="https://github.com/mad-001/Takaro-Inventory-Tracking/releases/latest/download/Source code (zip)" class="download-btn">Γ¼ç∩╕Å Download v1.0.1</a>
+            <a href="https://github.com/mad-001/Takaro-Inventory-Tracking" class="download-btn" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);">≡ƒôé View on GitHub</a>
+        </div>
+
+        <div class="info-box">
+            <h2>≡ƒÄ» What is this?</h2>
+            <p>A web-based inventory tracking tool for Takaro game servers. Search for player activity within specific locations, see exactly what items players picked up or dropped, and detect potential theft.</p>
+        </div>
+
+        <div class="info-box">
+            <h2>Γ£¿ Features</h2>
+            <div class="features">
+                <div class="feature-item">
+                    <strong>≡ƒöì Location Search</strong><br>
+                    Search for activity within any radius of coordinates
+                </div>
+                <div class="feature-item">
+                    <strong>≡ƒôè Change Tracking</strong><br>
+                    See exact item changes (+/-) not full inventories
+                </div>
+                <div class="feature-item">
+                    <strong>≡ƒÄ» Smart Aggregation</strong><br>
+                    Combines changes within 5-minute windows
+                </div>
+                <div class="feature-item">
+                    <strong>≡ƒöä Sortable Columns</strong><br>
+                    Click any column header to sort
+                </div>
+                <div class="feature-item">
+                    <strong>≡ƒÄ¿ Color Coded</strong><br>
+                    Green for gains, orange for losses
+                </div>
+                <div class="feature-item">
+                    <strong>≡ƒöÉ Secure Login</strong><br>
+                    Uses your Takaro credentials
+                </div>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <h2>≡ƒôï Prerequisites</h2>
+            <ul>
+                <li>Node.js (v14 or higher)</li>
+                <li>A Takaro account with API access</li>
+                <li>Your Takaro domain name</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <h2>≡ƒÜÇ Quick Start</h2>
+            <ol>
+                <li>Download and extract the latest release</li>
+                <li>Run <code>npm install</code> to install dependencies</li>
+                <li>Copy <code>config.example.json</code> to <code>config.json</code></li>
+                <li>Edit <code>config.json</code> with your Takaro domain name</li>
+                <li>Start the server:
+                    <ul>
+                        <li>Windows: Double-click <code>start-server.bat</code></li>
+                        <li>Linux/Mac: Run <code>node server.js</code></li>
+                    </ul>
+                </li>
+                <li>Open your browser to <code>http://localhost:5555</code></li>
+            </ol>
+        </div>
+
+        <div class="info-box">
+            <h2>ΓÜÖ∩╕Å Configuration</h2>
+            <p>Edit <code>config.json</code> with your settings:</p>
+            <pre style="background: #1a1a1a; padding: 15px; border-radius: 5px; overflow-x: auto; margin-top: 10px;"><code>{
+  "port": 5555,
+  "takaroApi": "https://api.takaro.io",
+  "takaroDomain": "your-domain-name-here"
+}</code></pre>
+        </div>
+
+        <div class="info-box">
+            <h2>≡ƒôû How to Use</h2>
+            <ol>
+                <li>Login with your Takaro credentials</li>
+                <li>Select a game server from the dropdown</li>
+                <li>Enter search parameters:
+                    <ul>
+                        <li>X and Z coordinates (center of search area)</li>
+                        <li>Radius in game units</li>
+                        <li>Time range to search</li>
+                    </ul>
+                </li>
+                <li>Click "Search Inventory"</li>
+                <li>Analyze the results:
+                    <ul>
+                        <li>Click column headers to sort</li>
+                        <li>Use the filter to search for players or items</li>
+                        <li>Green badges = items added (+)</li>
+                        <li>Orange badges = items removed (-)</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <div class="warning">
+            <strong>ΓÜá∩╕Å Important:</strong> Your <code>config.json</code> file contains sensitive information and should never be shared or committed to version control. It's already protected by .gitignore.
+        </div>
+
+        <div class="info-box">
+            <h2>≡ƒöº Troubleshooting</h2>
+            <h3>Server won't start</h3>
+            <ul>
+                <li>Make sure <code>config.json</code> exists (copy from <code>config.example.json</code>)</li>
+                <li>Check that port 5555 isn't already in use</li>
+                <li>Verify Node.js is installed: <code>node --version</code></li>
+            </ul>
+
+            <h3>Can't login</h3>
+            <ul>
+                <li>Verify your Takaro email and password are correct</li>
+                <li>Check that your domain name is correct in <code>config.json</code></li>
+                <li>Ensure you have API access enabled in Takaro</li>
+            </ul>
+
+            <h3>No results found</h3>
+            <ul>
+                <li>Verify coordinates are correct (check in-game position)</li>
+                <li>Try increasing the search radius</li>
+                <li>Check the time range includes when activity occurred</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <h2>≡ƒô¥ License</h2>
+            <p>MIT License - Free to use and modify!</p>
+        </div>
+
+        <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #3a3a3a; color: #6b7280;">
+            <p>Made with ≡ƒÆ£ for the Takaro community</p>
+            <p style="margin-top: 10px;">
+                <a href="https://github.com/mad-001/Takaro-Inventory-Tracking/issues" style="color: #a855f7; text-decoration: none;">Report an Issue</a> ΓÇó
+                <a href="https://github.com/mad-001/Takaro-Inventory-Tracking" style="color: #a855f7; text-decoration: none;">View on GitHub</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
