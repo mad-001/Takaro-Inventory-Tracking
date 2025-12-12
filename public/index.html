@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -145,6 +145,25 @@
             display: none;
         }
 
+        .search-filter {
+            margin-bottom: 16px;
+        }
+
+        .search-filter input {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0f0f14;
+            border: 1px solid #2a2a30;
+            border-radius: 6px;
+            color: #e5e7eb;
+            font-size: 14px;
+        }
+
+        .search-filter input:focus {
+            outline: none;
+            border-color: #8b5cf6;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -159,6 +178,42 @@
             font-size: 13px;
             font-weight: 600;
             color: #9ca3af;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+
+        th:hover {
+            background: #13131a;
+            color: #8b5cf6;
+        }
+
+        th .sort-icon {
+            display: inline-block;
+            margin-left: 8px;
+            width: 0;
+            height: 0;
+            vertical-align: middle;
+        }
+
+        th .sort-icon::after {
+            content: '';
+            display: block;
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-bottom: 6px solid #4b5563;
+        }
+
+        th.sorted-asc .sort-icon::after {
+            border-bottom: 6px solid #8b5cf6;
+            border-top: none;
+        }
+
+        th.sorted-desc .sort-icon::after {
+            border-bottom: none;
+            border-top: 6px solid #8b5cf6;
         }
 
         td {
@@ -180,6 +235,46 @@
             border-radius: 4px;
             font-size: 12px;
             font-weight: 600;
+        }
+
+        .qty-positive {
+            background: #10b981;
+            color: white;
+        }
+
+        .qty-negative {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .qty-zero {
+            background: #6b7280;
+            color: white;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-item .badge {
+            font-size: 11px;
+            padding: 2px 6px;
         }
 
         .error-message {
@@ -241,14 +336,24 @@
         </div>
 
         <div id="resultsSection">
-            <div class="section-title">Search Results</div>
+            <div class="results-header">
+                <div class="section-title">Search Results</div>
+                <div class="legend">
+                    <span class="legend-item"><span class="badge qty-positive">N</span> Added to inventory</span>
+                    <span class="legend-item"><span class="badge qty-negative">-N</span> Left inventory</span>
+                </div>
+            </div>
+            <div class="search-filter">
+                <input type="text" id="filterInput" placeholder="Filter by player name or item...">
+            </div>
             <table id="resultsTable">
                 <thead>
                     <tr>
-                        <th>Player</th>
-                        <th>Item</th>
-                        <th>Quantity</th>
-                        <th>Last Seen</th>
+                        <th data-sort="playerName">Player<span class="sort-icon"></span></th>
+                        <th data-sort="itemName">Item<span class="sort-icon"></span></th>
+                        <th data-sort="quantity">Quantity<span class="sort-icon"></span></th>
+                        <th data-sort="location">Location<span class="sort-icon"></span></th>
+                        <th data-sort="timestamp">Timestamp<span class="sort-icon"></span></th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -277,8 +382,8 @@
                 const select = document.getElementById('gameServerId');
                 select.innerHTML = '<option value="">Select a server...</option>';
 
-                if (data.servers && data.servers.length > 0) {
-                    data.servers.forEach(server => {
+                if (data.gameservers && data.gameservers.length > 0) {
+                    data.gameservers.forEach(server => {
                         const option = document.createElement('option');
                         option.value = server.id;
                         option.textContent = server.name;
@@ -327,26 +432,165 @@
             }
         });
 
+        let allResults = [];
+        let currentSort = { field: 'timestamp', direction: 'desc' };
+
         function displayResults(results) {
+            allResults = results && results.inventory ? results.inventory : [];
+
+            // Aggregate duplicate items: sum changes per player+item+location+timewindow
+            const aggregated = aggregateChanges(allResults);
+
+            sortResults(aggregated, currentSort.field, currentSort.direction);
+            renderFilteredResults(aggregated);
+            document.getElementById('resultsSection').style.display = 'block';
+        }
+
+        function aggregateChanges(data) {
+            const grouped = {};
+
+            data.forEach(item => {
+                // Group by player, item, and 5-minute time window
+                const timeWindow = Math.floor(new Date(item.timestamp).getTime() / (5 * 60 * 1000));
+                const key = `${item.playerId}_${item.itemCode}_${item.quality || 'none'}_${timeWindow}`;
+
+                if (!grouped[key]) {
+                    grouped[key] = { ...item, quantity: 0, count: 0 };
+                }
+
+                grouped[key].quantity += item.quantity;
+                grouped[key].count += 1;
+            });
+
+            // Filter out net-zero changes and convert back to array
+            return Object.values(grouped).filter(item => item.quantity !== 0);
+        }
+
+        function sortResults(data, field, direction) {
+            data.sort((a, b) => {
+                let aVal, bVal;
+
+                switch(field) {
+                    case 'playerName':
+                        aVal = (a.playerName || '').toLowerCase();
+                        bVal = (b.playerName || '').toLowerCase();
+                        break;
+                    case 'itemName':
+                        aVal = (a.itemName || '').toLowerCase();
+                        bVal = (b.itemName || '').toLowerCase();
+                        break;
+                    case 'quantity':
+                        aVal = a.quantity || 0;
+                        bVal = b.quantity || 0;
+                        break;
+                    case 'location':
+                        aVal = `${a.x || 0}_${a.z || 0}`;
+                        bVal = `${b.x || 0}_${b.z || 0}`;
+                        break;
+                    case 'timestamp':
+                        aVal = new Date(a.timestamp).getTime();
+                        bVal = new Date(b.timestamp).getTime();
+                        break;
+                    default:
+                        return 0;
+                }
+
+                if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+                if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        function renderFilteredResults(data) {
             const tbody = document.querySelector('#resultsTable tbody');
             tbody.innerHTML = '';
 
-            if (results && results.length > 0) {
-                results.forEach(result => {
+            if (data.length > 0) {
+                data.forEach(result => {
+                    const formatCoord = (val, axis) => {
+                        if (!val) return '?';
+                        const num = parseFloat(val);
+                        const abs = Math.abs(Math.round(num));
+                        if (axis === 'x') return num < 0 ? `${abs} W` : `${abs} E`;
+                        if (axis === 'z') return num < 0 ? `${abs} S` : `${abs} N`;
+                        return Math.round(num);
+                    };
+
+                    const qty = result.quantity || 0;
+                    const qtyClass = qty > 0 ? 'qty-positive' : (qty < 0 ? 'qty-negative' : 'qty-zero');
+                    const qtyText = qty > 0 ? `+${qty}` : qty;
+
                     const row = tbody.insertRow();
                     row.innerHTML = `
                         <td>${result.playerName || 'Unknown'}</td>
                         <td>${result.itemName || 'Unknown'}</td>
-                        <td><span class="badge">${result.quantity || 0}</span></td>
-                        <td>${new Date(result.lastSeen).toLocaleString()}</td>
+                        <td><span class="badge ${qtyClass}">${qtyText}</span></td>
+                        <td>${formatCoord(result.x, 'x')} ${formatCoord(result.y, 'y')} ${formatCoord(result.z, 'z')}</td>
+                        <td>${new Date(result.timestamp).toLocaleString()}</td>
                     `;
                 });
-                document.getElementById('resultsSection').style.display = 'block';
             } else {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #9ca3af;">No results found</td></tr>';
-                document.getElementById('resultsSection').style.display = 'block';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #9ca3af;">No results found</td></tr>';
             }
         }
+
+        // Add click handlers to sortable column headers
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => {
+                const field = th.getAttribute('data-sort');
+
+                // Toggle direction if clicking same column, otherwise default to ascending
+                if (currentSort.field === field) {
+                    currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSort.field = field;
+                    currentSort.direction = 'asc';
+                }
+
+                // Update visual indicators
+                document.querySelectorAll('th[data-sort]').forEach(header => {
+                    header.classList.remove('sorted-asc', 'sorted-desc');
+                });
+
+                th.classList.add(currentSort.direction === 'asc' ? 'sorted-asc' : 'sorted-desc');
+
+                // Re-render with new sort
+                const aggregated = aggregateChanges(allResults);
+                sortResults(aggregated, currentSort.field, currentSort.direction);
+
+                // Apply current filter if any
+                const filterQuery = document.getElementById('filterInput').value.toLowerCase();
+                if (filterQuery) {
+                    const filtered = aggregated.filter(item => {
+                        const playerMatch = (item.playerName || '').toLowerCase().includes(filterQuery);
+                        const itemMatch = (item.itemName || '').toLowerCase().includes(filterQuery);
+                        return playerMatch || itemMatch;
+                    });
+                    renderFilteredResults(filtered);
+                } else {
+                    renderFilteredResults(aggregated);
+                }
+            });
+        });
+
+        document.getElementById('filterInput').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const aggregated = aggregateChanges(allResults);
+            sortResults(aggregated, currentSort.field, currentSort.direction);
+
+            if (!query) {
+                renderFilteredResults(aggregated);
+                return;
+            }
+
+            const filtered = aggregated.filter(item => {
+                const playerMatch = (item.playerName || '').toLowerCase().includes(query);
+                const itemMatch = (item.itemName || '').toLowerCase().includes(query);
+                return playerMatch || itemMatch;
+            });
+
+            renderFilteredResults(filtered);
+        });
 
         function logout() {
             localStorage.removeItem('sessionId');
@@ -356,11 +600,9 @@
         loadGameServers();
 
         const now = new Date();
-        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 1000);
         document.getElementById('startDate').value = oneWeekAgo.toISOString().slice(0, 16);
         document.getElementById('endDate').value = now.toISOString().slice(0, 16);
     </script>
 </body>
 </html>
-
-
