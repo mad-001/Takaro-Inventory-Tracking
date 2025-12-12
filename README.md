@@ -1,15 +1,15 @@
-﻿# Takaro Inventory Tracker
+# Takaro Inventory Tracker
 
 A web-based inventory tracking tool for Takaro game servers. Track player inventory changes, detect theft, and analyze player activity within specific locations.
 
 ## Features
 
-- ≡ƒöì **Location-based search** - Search for player activity within a radius
-- ≡ƒôè **Inventory change tracking** - See exactly what items players picked up or dropped
-- ≡ƒÄ» **Smart aggregation** - Combines multiple changes within 5-minute windows
-- ≡ƒöä **Sortable columns** - Click any column header to sort
-- ≡ƒÄ¿ **Color-coded changes** - Green for gains, orange for losses
-- ≡ƒöÉ **Secure authentication** - Login with your Takaro credentials
+- **Location-based search** - Search for player activity within a radius
+- **Inventory change tracking** - See exactly what items players picked up or dropped
+- **Smart aggregation** - Combines multiple changes within 5-minute windows
+- **Sortable columns** - Click any column header to sort
+- **Color-coded changes** - Green for gains, orange for losses
+- **Secure authentication** - Login with your Takaro credentials
 
 ## Quick Start
 
@@ -84,7 +84,7 @@ The tracker:
 1. Searches for players within the specified radius and time range
 2. Retrieves inventory snapshots for those players
 3. Calculates changes between consecutive snapshots
-4. Filters out oscillations (pick up ΓåÆ drop ΓåÆ pick up = net change)
+4. Filters out oscillations (pick up → drop → pick up = net change)
 5. Aggregates changes within 5-minute windows
 6. Displays only meaningful inventory changes
 
