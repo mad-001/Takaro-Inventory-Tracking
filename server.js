@@ -1,172 +1,125 @@
-const express = require('express');
+﻿const express = require('express');
 const axios = require('axios');
 const path = require('path');
 const cors = require('cors');
+const fs = require('fs');
 
 const app = express();
-const PORT = 5555;
 
-// Takaro API configuration
-const TAKARO_API = 'https://api.takaro.io';
+// Load configuration
+let config;
+try {
+    const configPath = path.join(__dirname, 'config.json');
+    config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+} catch (error) {
+    console.error('ERROR: config.json not found or invalid!');
+    console.error('Please copy config.example.json to config.json and update with your settings.');
+    process.exit(1);
+}
 
-// Middleware
+const PORT = config.port;
+const TAKARO_API = config.takaroApi;
+const TAKARO_DOMAIN = config.takaroDomain;
+
+// File logging
+const logFile = path.join(__dirname, 'debug.log');
+function log(message) {
+    const msg = `${message}\n`;
+    console.log(message);
+    fs.appendFileSync(logFile, msg);
+}
+
 app.use(cors());
 app.use(express.json());
 
-// Session storage (in-memory for simplicity)
 const sessions = new Map();
 
-// Auth middleware
 function requireAuth(req, res, next) {
     const sessionId = req.headers['x-session-id'];
     if (!sessionId || !sessions.has(sessionId)) {
-        return res.status(401).json({ error: 'Unauthorized', message: 'Please login' });
+        return res.status(401).json({ error: 'Unauthorized' });
     }
     req.takaroToken = sessions.get(sessionId).takaroToken;
     req.sessionData = sessions.get(sessionId);
     next();
 }
 
-// Login endpoint - Extract token from response body and use as Bearer
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
-
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] Login attempt for: ${email}`);
+    const ts = new Date().toISOString();
+    console.log(`[${ts}] Login: ${email}`);
 
     try {
-        // Step 1: Login to Takaro
-        console.log(`[${timestamp}] Authenticating with Takaro...`);
-        
-        const loginResponse = await axios.post(`${TAKARO_API}/login`, {
+        const loginResp = await axios.post(`${TAKARO_API}/login`, {
             username: email,
             password: password
         }, {
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             timeout: 15000,
             validateStatus: (status) => status < 500
         });
 
-        // Check if login failed
-        if (loginResponse.status === 401) {
-            const ts = new Date().toISOString();
-            console.error(`[${ts}] Login failed: Invalid credentials`);
-            
-            return res.status(401).json({
-                success: false,
-                error: 'Authentication failed',
-                message: 'Invalid email or password. Please check your credentials.'
-            });
+        if (loginResp.status === 401) {
+            console.error(`[${ts}] Invalid credentials`);
+            return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
 
-        if (loginResponse.status !== 200) {
-            const ts = new Date().toISOString();
-            console.error(`[${ts}] Login failed with status: ${loginResponse.status}`);
-            console.error(`[${ts}] Response:`, loginResponse.data);
-            
-            return res.status(500).json({
-                success: false,
-                error: 'Login failed',
-                message: 'Unable to login to Takaro. Please try again.',
-                details: loginResponse.data
-            });
+        if (loginResp.status !== 200) {
+            console.error(`[${ts}] Login failed: ${loginResp.status}`);
+            return res.status(500).json({ success: false, error: 'Login failed' });
         }
 
-        // Step 2: Extract token from response body
-        const takaroToken = loginResponse.data?.data?.token;
-
+        const takaroToken = loginResp.data?.data?.token;
         if (!takaroToken) {
-            const ts = new Date().toISOString();
-            console.error(`[${ts}] No token in response body`);
-            console.error(`[${ts}] Response:`, loginResponse.data);
-            
-            return res.status(500).json({
-                success: false,
-                error: 'Authentication error',
-                message: 'Login succeeded but no token received from Takaro.'
-            });
+            console.error(`[${ts}] No token received`);
+            return res.status(500).json({ success: false, error: 'No token' });
         }
 
-        const ts2 = new Date().toISOString();
-        console.log(`[${ts2}] Successfully obtained Takaro token for: ${email}`);
-        console.log(`[${ts2}] Token: ${takaroToken.substring(0, 10)}...`);
+        console.log(`[${ts}] Token OK`);
 
-        // Step 3: Get user info with the token (using Authorization Bearer!)
-        let userData = null;
         try {
-            const meResponse = await axios.get(`${TAKARO_API}/me`, {
+            await axios.post(`${TAKARO_API}/selected-domain/${TAKARO_DOMAIN}`, {}, {
                 headers: {
-                    'Authorization': `Bearer ${takaroToken}`
+                    'Authorization': `Bearer ${takaroToken}`,
+                    'Content-Type': 'application/json'
                 },
                 timeout: 10000
             });
-            
-            userData = meResponse.data.data;
-            console.log(`[${ts2}] User authenticated: ${userData?.user?.name || email}`);
-            console.log(`[${ts2}] Available domains:`, userData?.domains?.map(d => d.name) || []);
-        } catch (meError) {
-            console.error(`[${ts2}] Failed to get user info:`, meError.message);
+            console.log(`[${ts}] Domain set: ${TAKARO_DOMAIN}`);
+        } catch (domainErr) {
+            console.error(`[${ts}] Domain selection error:`, domainErr.response?.status, domainErr.response?.data);
+            return res.status(500).json({ success: false, error: 'Domain selection failed' });
         }
 
-        // Step 4: Create session
         const sessionId = Math.random().toString(36).substring(7);
-
         sessions.set(sessionId, {
             username: email,
             takaroToken: takaroToken,
-            loginTime: Date.now(),
-            userData: userData
+            loginTime: Date.now()
         });
 
-        const ts3 = new Date().toISOString();
-        console.log(`[${ts3}] Session created for: ${email} (sessionId: ${sessionId})`);
-
-        res.json({
-            success: true,
-            sessionId,
-            username: email,
-            message: 'Login successful',
-            userData: userData
-        });
+        console.log(`[${ts}] Session: ${sessionId}`);
+        res.json({ success: true, sessionId, username: email });
 
     } catch (error) {
-        const ts = new Date().toISOString();
-        console.error(`[${ts}] Unexpected login error:`, error.message);
-        
-        if (error.response) {
-            console.error(`[${ts}] Response status: ${error.response.status}`);
-            console.error(`[${ts}] Response data:`, error.response.data);
-        }
-
-        res.status(500).json({
-            success: false,
-            error: 'Server error',
-            message: 'An error occurred during login. Please try again.',
-            details: error.message
-        });
+        console.error(`[${ts}] Login error:`, error.message);
+        res.status(500).json({ success: false, error: 'Server error' });
     }
 });
 
-// Logout endpoint
 app.post('/api/logout', (req, res) => {
     const sessionId = req.headers['x-session-id'];
-    if (sessionId) {
-        const session = sessions.get(sessionId);
-        if (session) {
-            const ts = new Date().toISOString();
-            console.log(`[${ts}] User ${session.username} logged out`);
-        }
-        sessions.delete(sessionId);
-    }
+    if (sessionId) sessions.delete(sessionId);
     res.json({ success: true });
 });
 
-// Get game servers
 app.get('/api/gameservers', requireAuth, async (req, res) => {
     try {
-        const response = await axios.post(`${TAKARO_API}/gameserver/search`, {}, {
+        const resp = await axios.post(`${TAKARO_API}/gameserver/search`, {
+            filters: {},
+            sortBy: 'name',
+            sortDirection: 'asc'
+        }, {
             headers: {
                 'Authorization': `Bearer ${req.takaroToken}`,
                 'Content-Type': 'application/json'
@@ -174,226 +127,266 @@ app.get('/api/gameservers', requireAuth, async (req, res) => {
             timeout: 10000
         });
 
-        const servers = response.data.data || [];
-        const ts = new Date().toISOString();
-        console.log(`[${ts}] Fetched ${servers.length} game servers`);
-        res.json({ servers: servers });
+        const gameservers = resp.data?.data || [];
+        res.json({ gameservers });
     } catch (error) {
-        console.error('Failed to fetch game servers:', error.response?.data || error.message);
-        res.status(error.response?.status || 500).json({
-            error: 'Failed to fetch game servers',
-            details: error.response?.data || error.message
-        });
+        console.error('Gameserver search error:', error.message);
+        res.status(500).json({ error: 'Failed to fetch gameservers' });
     }
 });
 
-// Serve static files
-app.use(express.static('public'));
+app.post('/api/search', requireAuth, async (req, res) => {
+    const { centerX, centerZ, radius, gameServerId, startDate, endDate } = req.body;
+    const ts = new Date().toISOString();
 
-// Health check
+    log(`[${ts}] Search: X=${centerX}, Z=${centerZ}, R=${radius}, GS=${gameServerId}`);
+    log(`[${ts}] Time range: ${startDate} to ${endDate}`);
+
+    try {
+        const playersResp = await axios.post(`${TAKARO_API}/tracking/location/radius`, {
+            gameserverId: gameServerId,
+            x: centerX,
+            y: 37,
+            z: centerZ,
+            radius: radius,
+            startDate: startDate,
+            endDate: endDate
+        }, {
+            headers: {
+                'Authorization': `Bearer ${req.takaroToken}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 30000
+        });
+
+        const playersInRadius = playersResp.data?.data || [];
+        log(`[${ts}] Found ${playersInRadius.length} location records`);
+
+        if (playersInRadius.length === 0) {
+            return res.json({ players: [], inventory: [], totalRecords: 0, message: 'No players in area' });
+        }
+
+        const uniquePlayerIds = [...new Set(playersInRadius.map(p => p.playerId))];
+        log(`[${ts}] Unique players: ${uniquePlayerIds.length}`);
+
+        const limitedPlayerIds = uniquePlayerIds.slice(0, 5);
+        log(`[${ts}] Processing ${limitedPlayerIds.length} players...`);
+
+        const allInventory = [];
+        const playerNames = {};
+
+        for (const playerId of limitedPlayerIds) {
+            try {
+                const playerResp = await axios.get(`${TAKARO_API}/player/${playerId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${req.takaroToken}`
+                    },
+                    timeout: 5000
+                });
+
+                const playerName = playerResp.data?.data?.name || 'Unknown';
+                playerNames[playerId] = playerName;
+
+                log(`[${ts}] Getting inventory for ${playerName}...`);
+
+                const records = await getInventoryChunked(
+                    req.takaroToken,
+                    playerId,
+                    startDate,
+                    endDate,
+                    ts
+                );
+
+                const playerLocations = playersInRadius.filter(p => p.playerId === playerId);
+
+                // Match inventory snapshots to location records by timestamp
+                const snapshotsWithLocation = records.map(snapshot => {
+                    const snapTime = new Date(snapshot.createdAt).getTime();
+
+                    // Find location record closest in time to this snapshot
+                    let closestLoc = null;
+                    let smallestDiff = Infinity;
+
+                    for (const loc of playerLocations) {
+                        const locTime = new Date(loc.createdAt).getTime();
+                        const diff = Math.abs(snapTime - locTime);
+                        if (diff < smallestDiff) {
+                            smallestDiff = diff;
+                            closestLoc = loc;
+                        }
+                    }
+
+                    return {
+                        ...snapshot,
+                        location: closestLoc,
+                        timeDiff: smallestDiff
+                    };
+                });
+
+                // Sort by time
+                snapshotsWithLocation.sort((a, b) =>
+                    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+                );
+
+                // Group by item
+                const itemGroups = {};
+                snapshotsWithLocation.forEach(snap => {
+                    const key = `${snap.itemId}_${snap.quality || 'none'}`;
+                    if (!itemGroups[key]) {
+                        itemGroups[key] = [];
+                    }
+                    itemGroups[key].push(snap);
+                });
+
+                let changesAdded = 0;
+
+                // For each item, calculate consecutive changes and filter oscillations
+                Object.keys(itemGroups).forEach(key => {
+                    const snapshots = itemGroups[key];
+
+                    if (snapshots.length < 2) return;
+
+                    // Calculate all consecutive deltas
+                    const deltas = [];
+                    for (let i = 1; i < snapshots.length; i++) {
+                        const prev = snapshots[i - 1];
+                        const curr = snapshots[i];
+                        const change = curr.quantity - prev.quantity;
+
+                        if (change !== 0) {
+                            deltas.push({
+                                timestamp: curr.createdAt,
+                                change: change,
+                                prevQty: prev.quantity,
+                                currQty: curr.quantity,
+                                snapshot: curr
+                            });
+                        }
+                    }
+
+                    // Filter oscillations: if change is immediately reversed, skip both
+                    const filtered = [];
+                    for (let i = 0; i < deltas.length; i++) {
+                        const curr = deltas[i];
+                        const next = deltas[i + 1];
+
+                        // Check if next change exactly reverses this one
+                        if (next && curr.change === -next.change) {
+                            // Skip both (oscillation detected)
+                            i++; // Skip next iteration too
+                        } else {
+                            filtered.push(curr);
+                        }
+                    }
+
+                    // Add filtered changes to results
+                    filtered.forEach(delta => {
+                        allInventory.push({
+                            playerId: playerId,
+                            playerName: playerName,
+                            itemName: delta.snapshot.itemName || delta.snapshot.itemCode || 'Unknown',
+                            itemCode: delta.snapshot.itemCode,
+                            quantity: delta.change,
+                            quality: delta.snapshot.quality,
+                            timestamp: delta.timestamp,
+                            x: delta.snapshot.location?.x,
+                            y: delta.snapshot.location?.y,
+                            z: delta.snapshot.location?.z
+                        });
+                        changesAdded++;
+
+                        log(`[${ts}] ${delta.snapshot.itemName || delta.snapshot.itemCode}: ${delta.prevQty} -> ${delta.currQty} (${delta.change > 0 ? '+' : ''}${delta.change})`);
+                    });
+                });
+
+                log(`[${ts}] ${playerName}: ${changesAdded} inventory changes found`);
+
+            } catch (playerErr) {
+                console.error(`[${ts}] Error for ${playerId}:`, playerErr.message);
+                playerNames[playerId] = 'Unknown';
+            }
+        }
+
+        log(`[${ts}] Total: ${allInventory.length} inventory changes`);
+
+        res.json({
+            players: limitedPlayerIds.map(id => ({
+                playerId: id,
+                playerName: playerNames[id] || 'Unknown',
+                locationCount: playersInRadius.filter(p => p.playerId === id).length
+            })),
+            inventory: allInventory,
+            totalRecords: allInventory.length
+        });
+
+    } catch (error) {
+        log(`[${ts}] Search error: ${error.message}`);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+async function getInventoryChunked(token, playerId, startDate, endDate, logTs) {
+    try {
+        const startISO = new Date(startDate).toISOString();
+        const endISO = new Date(endDate).toISOString();
+
+        log(`[${logTs}] === API REQUEST ===`);
+        log(`[${logTs}] PlayerId: ${playerId}`);
+        log(`[${logTs}] StartDate: ${startISO}`);
+        log(`[${logTs}] EndDate: ${endISO}`);
+
+        const resp = await axios.post(`${TAKARO_API}/tracking/inventory/player`, {
+            playerId: playerId,
+            startDate: startISO,
+            endDate: endISO
+        }, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 30000
+        });
+
+        const records = resp.data?.data || [];
+        log(`[${logTs}] API returned ${records.length} inventory records`);
+
+        // CLIENT-SIDE FILTER
+        const reqStart = new Date(startISO).getTime();
+        const reqEnd = new Date(endISO).getTime();
+
+        const filtered = records.filter(r => {
+            const t = new Date(r.createdAt).getTime();
+            return t >= reqStart && t <= reqEnd;
+        });
+
+        log(`[${logTs}] After date filter: ${filtered.length} records (removed ${records.length - filtered.length})`);
+
+        if (filtered.length > 0) {
+            const timestamps = filtered.map(r => new Date(r.createdAt).getTime()).sort((a, b) => a - b);
+            const earliest = new Date(timestamps[0]);
+            const latest = new Date(timestamps[timestamps.length - 1]);
+
+            log(`[${logTs}] Filtered range: ${earliest.toISOString()} to ${latest.toISOString()}`);
+        }
+
+        return filtered;
+
+    } catch (err) {
+        log(`[${logTs}] Inventory fetch error: ${err.message}`);
+        return [];
+    }
+}
+
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
-        timestamp: new Date().toISOString(),
-        activeSessions: sessions.size
+        sessions: sessions.size,
+        uptime: process.uptime()
     });
 });
 
-// Proxy endpoint for radius players
-app.get('/api/tracking/radius-players', requireAuth, async (req, res) => {
-    try {
-        const { gameserverId, x, y, z, radius, startDate, endDate } = req.query;
+app.use(express.static(path.join(__dirname, 'public')));
 
-        const ts = new Date().toISOString();
-        console.log(`[${ts}] Radius search: gameserver=${gameserverId}, center=(${x},${y},${z}), radius=${radius}`);
-
-        const response = await axios.get(`${TAKARO_API}/tracking/radius-players`, {
-            params: { gameserverId, x, y, z, radius, startDate, endDate },
-            headers: {
-                'Authorization': `Bearer ${req.takaroToken}`,
-                'Accept': 'application/json'
-            },
-            timeout: 30000
-        });
-
-        res.json(response.data);
-    } catch (error) {
-        console.error('Error fetching radius players:', error.message);
-        res.status(error.response?.status || 500).json({
-            error: true,
-            message: error.message,
-            details: error.response?.data
-        });
-    }
+app.listen(PORT, () => {
+    log(`Takaro Inventory Tracker listening on port ${PORT}`);
 });
-
-// Proxy endpoint for player movement history
-app.get('/api/tracking/player-movement-history', requireAuth, async (req, res) => {
-    try {
-        const { playerId, startDate, endDate, limit } = req.query;
-
-        const ts = new Date().toISOString();
-        console.log(`[${ts}] Movement history: players=${playerId}`);
-
-        const params = { startDate, endDate, limit: limit || 1000 };
-
-        if (Array.isArray(playerId)) {
-            playerId.forEach(id => params.playerId = id);
-        } else {
-            params.playerId = playerId;
-        }
-
-        const response = await axios.get(`${TAKARO_API}/tracking/player-movement-history`, {
-            params,
-            headers: {
-                'Authorization': `Bearer ${req.takaroToken}`,
-                'Accept': 'application/json'
-            },
-            timeout: 30000
-        });
-
-        res.json(response.data);
-    } catch (error) {
-        console.error('Error fetching movement history:', error.message);
-        res.status(error.response?.status || 500).json({
-            error: true,
-            message: error.message,
-            details: error.response?.data
-        });
-    }
-});
-
-// Proxy endpoint for player inventory history
-app.get('/api/tracking/player-inventory-history', requireAuth, async (req, res) => {
-    try {
-        const { playerId, startDate, endDate } = req.query;
-
-        const ts = new Date().toISOString();
-        console.log(`[${ts}] Inventory history: player=${playerId}`);
-
-        const response = await axios.get(`${TAKARO_API}/tracking/player-inventory-history`, {
-            params: { playerId, startDate, endDate },
-            headers: {
-                'Authorization': `Bearer ${req.takaroToken}`,
-                'Accept': 'application/json'
-            },
-            timeout: 30000
-        });
-
-        res.json(response.data);
-    } catch (error) {
-        console.error('Error fetching inventory history:', error.message);
-        res.status(error.response?.status || 500).json({
-            error: true,
-            message: error.message,
-            details: error.response?.data
-        });
-    }
-});
-
-// Search endpoint - combines radius search with inventory data
-app.post('/api/search', requireAuth, async (req, res) => {
-    try {
-        const { centerX, centerZ, radius, gameServerId, startDate, endDate } = req.body;
-
-        const ts = new Date().toISOString();
-        console.log(`[${ts}] Combined search: server=${gameServerId}, center=(${centerX},${centerZ}), radius=${radius}`);
-
-        // Step 1: Get players in radius
-        const radiusResponse = await axios.get(`${TAKARO_API}/tracking/radius-players`, {
-            params: {
-                gameserverId: gameServerId,
-                x: centerX,
-                y: 0, // Using 0 for Y since we're doing 2D search
-                z: centerZ,
-                radius: radius,
-                startDate: startDate,
-                endDate: endDate
-            },
-            headers: {
-                'Authorization': `Bearer ${req.takaroToken}`,
-                'Accept': 'application/json'
-            },
-            timeout: 30000
-        });
-
-        const playersInRadius = radiusResponse.data?.data || [];
-        console.log(`[${ts}] Found ${playersInRadius.length} players in radius`);
-
-        if (playersInRadius.length === 0) {
-            return res.json([]);
-        }
-
-        // Step 2: Get inventory history for each player
-        const inventoryPromises = playersInRadius.map(async (player) => {
-            try {
-                const invResponse = await axios.get(`${TAKARO_API}/tracking/player-inventory-history`, {
-                    params: {
-                        playerId: player.playerId,
-                        startDate: startDate,
-                        endDate: endDate
-                    },
-                    headers: {
-                        'Authorization': `Bearer ${req.takaroToken}`,
-                        'Accept': 'application/json'
-                    },
-                    timeout: 30000
-                });
-
-                const inventoryData = invResponse.data?.data || [];
-                
-                // Transform inventory data to include player name
-                return inventoryData.map(item => ({
-                    playerId: player.playerId,
-                    playerName: player.playerName || 'Unknown',
-                    itemName: item.itemName || item.itemCode || 'Unknown',
-                    itemCode: item.itemCode,
-                    quantity: item.quantity || item.amount || 0,
-                    lastSeen: item.timestamp || item.createdAt || new Date().toISOString()
-                }));
-            } catch (invError) {
-                console.error(`[${ts}] Failed to get inventory for player ${player.playerId}:`, invError.message);
-                return [];
-            }
-        });
-
-        const allInventories = await Promise.all(inventoryPromises);
-        const flattenedResults = allInventories.flat();
-
-        console.log(`[${ts}] Returning ${flattenedResults.length} inventory records`);
-        res.json(flattenedResults);
-
-    } catch (error) {
-        console.error('Error in combined search:', error.message);
-        res.status(error.response?.status || 500).json({
-            error: true,
-            message: error.message,
-            details: error.response?.data
-        });
-    }
-});
-
-// Serve login page
-app.get('/login', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
-
-// Serve frontend
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-    console.log('='.repeat(60));
-    console.log('🚀 Takaro Inventory Tracker Server');
-    console.log('='.repeat(60));
-    console.log(`✓ Server running on port ${PORT}`);
-    console.log(`✓ Access locally: http://localhost:${PORT}`);
-    console.log(`✓ Access from network: http://SERVER:${PORT}`);
-    console.log(`✓ API endpoint: ${TAKARO_API}`);
-    console.log(`✓ Authentication: Authorization Bearer token`);
-    console.log(`✓ Login: Email + Password -> Bearer Token`);
-    console.log('='.repeat(60));
-});
-
-

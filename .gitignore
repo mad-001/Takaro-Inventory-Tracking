@@ -1,8 +1,28 @@
-﻿node_modules/
-*.log
-*.tmp
-.env
+﻿# Configuration (contains sensitive data)
+config.json
 
-# Backup files
-*.backup
+# Logs
+debug.log
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.bak
+*.backup.*
 *.old
+*.old2
