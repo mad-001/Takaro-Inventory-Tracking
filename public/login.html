@@ -170,22 +170,28 @@
             <ul>
                 <li><strong>Email + Password:</strong> Your Takaro account credentials</li>
                 <li><strong>Email + API Token:</strong> Enter your Takaro API token in the password field</li>
+                <li><strong>Domain:</strong> Your Takaro domain name (e.g., "my-server-name")</li>
             </ul>
         </div>
-        
+
         <div id="errorMessage" class="error-message"></div>
-        
+
         <form id="loginForm">
             <div class="form-group">
                 <label for="email">Email</label>
                 <input type="email" id="email" name="email" placeholder="your@email.com" required>
             </div>
-            
+
             <div class="form-group">
                 <label for="password">Password / API Token</label>
                 <input type="password" id="password" name="password" placeholder="Enter your password or API token" required>
             </div>
-            
+
+            <div class="form-group">
+                <label for="domain">Takaro Domain</label>
+                <input type="text" id="domain" name="domain" placeholder="your-domain-name" required>
+            </div>
+
             <button type="submit" id="loginBtn">Sign In</button>
             <div class="loading-text" id="loadingText">Validating credentials with Takaro...</div>
         </form>
@@ -194,26 +200,27 @@
     <script>
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
+            const domain = document.getElementById('domain').value;
             const errorDiv = document.getElementById('errorMessage');
             const loginBtn = document.getElementById('loginBtn');
             const loadingText = document.getElementById('loadingText');
-            
+
             // Show loading state
             loginBtn.disabled = true;
             loginBtn.textContent = 'Signing in...';
             loadingText.style.display = 'block';
             errorDiv.style.display = 'none';
-            
+
             try {
                 const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify({ email, password, domain })
                 });
                 
                 const data = await response.json();

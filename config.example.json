@@ -1,5 +1,9 @@
-﻿{
+{
+  "_comment": "Configuration file for Takaro Inventory Tracker",
+
   "port": 5555,
+  "_port_description": "The port number the server will listen on. Default: 5555",
+
   "takaroApi": "https://api.takaro.io",
-  "takaroDomain": "your-domain-name-here"
+  "_takaroApi_description": "The Takaro API endpoint. Should not need to change unless Takaro updates their API URL."
 }

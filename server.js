@@ -19,7 +19,7 @@ try {
 
 const PORT = config.port;
 const TAKARO_API = config.takaroApi;
-const TAKARO_DOMAIN = config.takaroDomain;
+// Note: takaroDomain is now provided by users during login, not from config
 
 // File logging
 const logFile = path.join(__dirname, 'debug.log');
@@ -45,9 +45,9 @@ function requireAuth(req, res, next) {
 }
 
 app.post('/api/login', async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, domain } = req.body;
     const ts = new Date().toISOString();
-    console.log(`[${ts}] Login: ${email}`);
+    console.log(`[${ts}] Login: ${email} (Domain: ${domain})`);
 
     try {
         const loginResp = await axios.post(`${TAKARO_API}/login`, {
@@ -78,23 +78,24 @@ app.post('/api/login', async (req, res) => {
         console.log(`[${ts}] Token OK`);
 
         try {
-            await axios.post(`${TAKARO_API}/selected-domain/${TAKARO_DOMAIN}`, {}, {
+            await axios.post(`${TAKARO_API}/selected-domain/${domain}`, {}, {
                 headers: {
                     'Authorization': `Bearer ${takaroToken}`,
                     'Content-Type': 'application/json'
                 },
                 timeout: 10000
             });
-            console.log(`[${ts}] Domain set: ${TAKARO_DOMAIN}`);
+            console.log(`[${ts}] Domain set: ${domain}`);
         } catch (domainErr) {
             console.error(`[${ts}] Domain selection error:`, domainErr.response?.status, domainErr.response?.data);
-            return res.status(500).json({ success: false, error: 'Domain selection failed' });
+            return res.status(500).json({ success: false, error: 'Domain selection failed. Please check your domain name.' });
         }
 
         const sessionId = Math.random().toString(36).substring(7);
         sessions.set(sessionId, {
             username: email,
             takaroToken: takaroToken,
+            takaroDomain: domain,
             loginTime: Date.now()
         });
 
