@@ -12,22 +12,12 @@ try {
     const configPath = path.join(__dirname, 'config.json');
     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 } catch (error) {
-    console.error('ERROR: config.json not found or invalid!');
-    console.error('Please copy config.example.json to config.json and update with your settings.');
     process.exit(1);
 }
 
 const PORT = config.port;
 const TAKARO_API = config.takaroApi;
 // Note: takaroDomain is now provided by users during login, not from config
-
-// File logging
-const logFile = path.join(__dirname, 'debug.log');
-function log(message) {
-    const msg = `${message}\n`;
-    console.log(message);
-    fs.appendFileSync(logFile, msg);
-}
 
 app.use(cors());
 app.use(express.json());
@@ -46,8 +36,6 @@ function requireAuth(req, res, next) {
 
 app.post('/api/login', async (req, res) => {
     const { email, password, domain } = req.body;
-    const ts = new Date().toISOString();
-    console.log(`[${ts}] Login attempt`);
 
     try {
         const loginResp = await axios.post(`${TAKARO_API}/login`, {
@@ -60,22 +48,17 @@ app.post('/api/login', async (req, res) => {
         });
 
         if (loginResp.status === 401) {
-            console.error(`[${ts}] Invalid credentials`);
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
 
         if (loginResp.status !== 200) {
-            console.error(`[${ts}] Login failed: ${loginResp.status}`);
             return res.status(500).json({ success: false, error: 'Login failed' });
         }
 
         const takaroToken = loginResp.data?.data?.token;
         if (!takaroToken) {
-            console.error(`[${ts}] No token received`);
             return res.status(500).json({ success: false, error: 'No token' });
         }
-
-        console.log(`[${ts}] Authentication successful`);
 
         try {
             await axios.post(`${TAKARO_API}/selected-domain/${domain}`, {}, {
@@ -85,9 +68,7 @@ app.post('/api/login', async (req, res) => {
                 },
                 timeout: 10000
             });
-            console.log(`[${ts}] Domain selected`);
         } catch (domainErr) {
-            console.error(`[${ts}] Domain selection error:`, domainErr.response?.status, domainErr.response?.data);
             return res.status(500).json({ success: false, error: 'Domain selection failed. Please check your domain name.' });
         }
 
@@ -97,11 +78,9 @@ app.post('/api/login', async (req, res) => {
             loginTime: Date.now()
         });
 
-        console.log(`[${ts}] Session created`);
         res.json({ success: true, sessionId });
 
     } catch (error) {
-        console.error(`[${ts}] Login error:`, error.message);
         res.status(500).json({ success: false, error: 'Server error' });
     }
 });
@@ -129,17 +108,12 @@ app.get('/api/gameservers', requireAuth, async (req, res) => {
         const gameservers = resp.data?.data || [];
         res.json({ gameservers });
     } catch (error) {
-        console.error('Gameserver search error:', error.message);
         res.status(500).json({ error: 'Failed to fetch gameservers' });
     }
 });
 
 app.post('/api/search', requireAuth, async (req, res) => {
     const { centerX, centerZ, radius, gameServerId, startDate, endDate } = req.body;
-    const ts = new Date().toISOString();
-
-    log(`[${ts}] Search: X=${centerX}, Z=${centerZ}, R=${radius}, GS=${gameServerId}`);
-    log(`[${ts}] Time range: ${startDate} to ${endDate}`);
 
     try {
         const playersResp = await axios.post(`${TAKARO_API}/tracking/location/radius`, {
@@ -159,17 +133,14 @@ app.post('/api/search', requireAuth, async (req, res) => {
         });
 
         const playersInRadius = playersResp.data?.data || [];
-        log(`[${ts}] Found ${playersInRadius.length} location records`);
 
         if (playersInRadius.length === 0) {
             return res.json({ players: [], inventory: [], totalRecords: 0, message: 'No players in area' });
         }
 
         const uniquePlayerIds = [...new Set(playersInRadius.map(p => p.playerId))];
-        log(`[${ts}] Unique players: ${uniquePlayerIds.length}`);
 
         const limitedPlayerIds = uniquePlayerIds.slice(0, 5);
-        log(`[${ts}] Processing ${limitedPlayerIds.length} players...`);
 
         const allInventory = [];
         const playerNames = {};
@@ -186,14 +157,11 @@ app.post('/api/search', requireAuth, async (req, res) => {
                 const playerName = playerResp.data?.data?.name || 'Unknown';
                 playerNames[playerId] = playerName;
 
-                log(`[${ts}] Getting inventory for ${playerName}...`);
-
                 const records = await getInventoryChunked(
                     req.takaroToken,
                     playerId,
                     startDate,
-                    endDate,
-                    ts
+                    endDate
                 );
 
                 const playerLocations = playersInRadius.filter(p => p.playerId === playerId);
@@ -295,20 +263,13 @@ app.post('/api/search', requireAuth, async (req, res) => {
                             z: delta.snapshot.location?.z
                         });
                         changesAdded++;
-
-                        log(`[${ts}] ${delta.snapshot.itemName || delta.snapshot.itemCode}: ${delta.prevQty} -> ${delta.currQty} (${delta.change > 0 ? '+' : ''}${delta.change})`);
                     });
                 });
 
-                log(`[${ts}] ${playerName}: ${changesAdded} inventory changes found`);
-
             } catch (playerErr) {
-                console.error(`[${ts}] Error for ${playerId}:`, playerErr.message);
                 playerNames[playerId] = 'Unknown';
             }
         }
-
-        log(`[${ts}] Total: ${allInventory.length} inventory changes`);
 
         res.json({
             players: limitedPlayerIds.map(id => ({
@@ -321,20 +282,14 @@ app.post('/api/search', requireAuth, async (req, res) => {
         });
 
     } catch (error) {
-        log(`[${ts}] Search error: ${error.message}`);
         res.status(500).json({ error: error.message });
     }
 });
 
-async function getInventoryChunked(token, playerId, startDate, endDate, logTs) {
+async function getInventoryChunked(token, playerId, startDate, endDate) {
     try {
         const startISO = new Date(startDate).toISOString();
         const endISO = new Date(endDate).toISOString();
-
-        log(`[${logTs}] === API REQUEST ===`);
-        log(`[${logTs}] PlayerId: ${playerId}`);
-        log(`[${logTs}] StartDate: ${startISO}`);
-        log(`[${logTs}] EndDate: ${endISO}`);
 
         const resp = await axios.post(`${TAKARO_API}/tracking/inventory/player`, {
             playerId: playerId,
@@ -349,7 +304,6 @@ async function getInventoryChunked(token, playerId, startDate, endDate, logTs) {
         });
 
         const records = resp.data?.data || [];
-        log(`[${logTs}] API returned ${records.length} inventory records`);
 
         // CLIENT-SIDE FILTER
         const reqStart = new Date(startISO).getTime();
@@ -360,20 +314,9 @@ async function getInventoryChunked(token, playerId, startDate, endDate, logTs) {
             return t >= reqStart && t <= reqEnd;
         });
 
-        log(`[${logTs}] After date filter: ${filtered.length} records (removed ${records.length - filtered.length})`);
-
-        if (filtered.length > 0) {
-            const timestamps = filtered.map(r => new Date(r.createdAt).getTime()).sort((a, b) => a - b);
-            const earliest = new Date(timestamps[0]);
-            const latest = new Date(timestamps[timestamps.length - 1]);
-
-            log(`[${logTs}] Filtered range: ${earliest.toISOString()} to ${latest.toISOString()}`);
-        }
-
         return filtered;
 
     } catch (err) {
-        log(`[${logTs}] Inventory fetch error: ${err.message}`);
         return [];
     }
 }
@@ -388,6 +331,4 @@ app.get('/api/health', (req, res) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.listen(PORT, () => {
-    log(`Takaro Inventory Tracker listening on port ${PORT}`);
-});
+app.listen(PORT);
