@@ -12,11 +12,6 @@ window.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    const username = localStorage.getItem('username');
-    if (username) {
-        document.getElementById('userInfo').textContent = `Logged in as: ${username}`;
-    }
-
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
@@ -36,7 +31,6 @@ function logout() {
         headers: { 'x-session-id': sessionId }
     }).finally(() => {
         localStorage.removeItem('sessionId');
-        localStorage.removeItem('username');
         window.location.href = '/login.html';
     });
 }

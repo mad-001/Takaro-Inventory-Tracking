@@ -47,7 +47,7 @@ function requireAuth(req, res, next) {
 app.post('/api/login', async (req, res) => {
     const { email, password, domain } = req.body;
     const ts = new Date().toISOString();
-    console.log(`[${ts}] Login: ${email} (Domain: ${domain})`);
+    console.log(`[${ts}] Login attempt`);
 
     try {
         const loginResp = await axios.post(`${TAKARO_API}/login`, {
@@ -75,7 +75,7 @@ app.post('/api/login', async (req, res) => {
             return res.status(500).json({ success: false, error: 'No token' });
         }
 
-        console.log(`[${ts}] Token OK`);
+        console.log(`[${ts}] Authentication successful`);
 
         try {
             await axios.post(`${TAKARO_API}/selected-domain/${domain}`, {}, {
@@ -85,7 +85,7 @@ app.post('/api/login', async (req, res) => {
                 },
                 timeout: 10000
             });
-            console.log(`[${ts}] Domain set: ${domain}`);
+            console.log(`[${ts}] Domain selected`);
         } catch (domainErr) {
             console.error(`[${ts}] Domain selection error:`, domainErr.response?.status, domainErr.response?.data);
             return res.status(500).json({ success: false, error: 'Domain selection failed. Please check your domain name.' });
@@ -93,14 +93,12 @@ app.post('/api/login', async (req, res) => {
 
         const sessionId = Math.random().toString(36).substring(7);
         sessions.set(sessionId, {
-            username: email,
             takaroToken: takaroToken,
-            takaroDomain: domain,
             loginTime: Date.now()
         });
 
-        console.log(`[${ts}] Session: ${sessionId}`);
-        res.json({ success: true, sessionId, username: email });
+        console.log(`[${ts}] Session created`);
+        res.json({ success: true, sessionId });
 
     } catch (error) {
         console.error(`[${ts}] Login error:`, error.message);
