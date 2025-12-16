@@ -112,6 +112,134 @@ app.get('/api/gameservers', requireAuth, async (req, res) => {
     }
 });
 
+app.get('/api/players', requireAuth, async (req, res) => {
+    const { gameServerId } = req.query;
+
+    try {
+        const resp = await axios.get(`${TAKARO_API}/gameserver/${gameServerId}/players`, {
+            headers: {
+                'Authorization': `Bearer ${req.takaroToken}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 10000
+        });
+
+        const players = (resp.data?.data || []).map(player => ({
+            playerId: player.playerId,
+            playerName: player.playerName || 'Unknown',
+            steamId: player.steamId || player.epicOnlineServicesId || ''
+        }));
+
+        res.json({ players });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch players' });
+    }
+});
+
+app.post('/api/search-by-player', requireAuth, async (req, res) => {
+    const { playerId, startDate, endDate } = req.body;
+
+    try {
+        const playerResp = await axios.get(`${TAKARO_API}/player/${playerId}`, {
+            headers: {
+                'Authorization': `Bearer ${req.takaroToken}`
+            },
+            timeout: 5000
+        });
+
+        const playerName = playerResp.data?.data?.name || 'Unknown';
+
+        const inventoryResp = await axios.post(`${TAKARO_API}/tracking/inventory/player`, {
+            playerId: playerId,
+            startDate: startDate,
+            endDate: endDate
+        }, {
+            headers: {
+                'Authorization': `Bearer ${req.takaroToken}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 30000
+        });
+
+        const inventoryData = inventoryResp.data?.data || [];
+
+        if (inventoryData.length === 0) {
+            return res.json({
+                player: { playerId, playerName },
+                inventory: [],
+                totalItems: 0
+            });
+        }
+
+        const endTime = new Date(endDate).getTime();
+        let closestSnapshot = inventoryData[0];
+        let closestTimeDiff = Math.abs(new Date(inventoryData[0].createdAt).getTime() - endTime);
+
+        for (const snapshot of inventoryData) {
+            const snapTime = new Date(snapshot.createdAt).getTime();
+            const timeDiff = Math.abs(snapTime - endTime);
+            if (timeDiff < closestTimeDiff) {
+                closestTimeDiff = timeDiff;
+                closestSnapshot = snapshot;
+            }
+        }
+
+        const snapshotTime = closestSnapshot.createdAt;
+        const itemsAtTime = inventoryData.filter(item => item.createdAt === snapshotTime);
+
+        const movementResp = await axios.post(`${TAKARO_API}/tracking/player-movement-history`, {
+            playerId: [playerId],
+            startDate: startDate,
+            endDate: endDate,
+            limit: 1000
+        }, {
+            headers: {
+                'Authorization': `Bearer ${req.takaroToken}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 10000
+        });
+
+        const movements = movementResp.data?.data || [];
+
+        const inventory = itemsAtTime.map(item => {
+            const itemTime = new Date(item.createdAt).getTime();
+
+            let closestLocation = null;
+            let closestLocDiff = Infinity;
+
+            for (const movement of movements) {
+                const movTime = new Date(movement.createdAt).getTime();
+                const timeDiff = Math.abs(itemTime - movTime);
+                if (timeDiff < closestLocDiff) {
+                    closestLocDiff = timeDiff;
+                    closestLocation = movement;
+                }
+            }
+
+            return {
+                itemName: item.itemName || item.itemCode || 'Unknown',
+                itemCode: item.itemCode,
+                quantity: item.quantity,
+                quality: item.quality,
+                timestamp: item.createdAt,
+                x: closestLocation?.x,
+                y: closestLocation?.y,
+                z: closestLocation?.z
+            };
+        });
+
+        res.json({
+            player: { playerId, playerName },
+            inventory: inventory,
+            totalItems: inventory.length
+        });
+
+    } catch (error) {
+        res.status(500).json({ error: error.message || 'Failed to fetch player inventory' });
+    }
+});
+
 app.post('/api/search', requireAuth, async (req, res) => {
     const { centerX, centerZ, radius, gameServerId, startDate, endDate } = req.body;
 

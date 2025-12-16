@@ -103,6 +103,19 @@
             background: #13131a;
         }
 
+        input[type="datetime-local"] {
+            background: #1a1a1f;
+            color: #e5e7eb;
+            border: 1px solid #8b5cf6;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+        }
+
         .coordinate-group {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
@@ -298,26 +311,45 @@
         <div class="form-section">
             <div class="section-title">Location Parameters</div>
             <form id="searchForm">
-                <div class="form-group coordinate-group">
-                    <div>
-                        <label for="centerX">X Coordinate</label>
-                        <input type="number" id="centerX" name="centerX" required>
-                    </div>
-                    <div>
-                        <label for="centerZ">Z Coordinate</label>
-                        <input type="number" id="centerZ" name="centerZ" required>
-                    </div>
-                    <div>
-                        <label for="radius">Radius</label>
-                        <input type="number" id="radius" name="radius" required>
-                    </div>
-                </div>
-
                 <div class="form-group">
                     <label for="gameServerId">Game Server</label>
                     <select id="gameServerId" name="gameServerId" required>
                         <option value="">Loading servers...</option>
                     </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="searchType">Search Type</label>
+                    <select id="searchType" name="searchType">
+                        <option value="location">By Location</option>
+                        <option value="player">By Player</option>
+                    </select>
+                </div>
+
+                <div id="locationFields">
+                    <div class="form-group coordinate-group">
+                        <div>
+                            <label for="centerX">X Coordinate</label>
+                            <input type="number" id="centerX" name="centerX">
+                        </div>
+                        <div>
+                            <label for="centerZ">Z Coordinate</label>
+                            <input type="number" id="centerZ" name="centerZ">
+                        </div>
+                        <div>
+                            <label for="radius">Radius</label>
+                            <input type="number" id="radius" name="radius">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="playerFields" style="display: none;">
+                    <div class="form-group">
+                        <label for="playerId">Select Player</label>
+                        <select id="playerId" name="playerId">
+                            <option value="">Select a player...</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="form-group time-group">
@@ -397,26 +429,13 @@
             }
         }
 
-        document.getElementById('searchForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const formData = {
-                centerX: parseFloat(document.getElementById('centerX').value),
-                centerZ: parseFloat(document.getElementById('centerZ').value),
-                radius: parseFloat(document.getElementById('radius').value),
-                gameServerId: document.getElementById('gameServerId').value,
-                startDate: document.getElementById('startDate').value,
-                endDate: document.getElementById('endDate').value
-            };
+        async function loadPlayers() {
+            const gameServerId = document.getElementById('gameServerId').value;
+            if (!gameServerId) return;
 
             try {
-                const response = await fetch('/api/search', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Session-ID': sessionId
-                    },
-                    body: JSON.stringify(formData)
+                const response = await fetch(`/api/players?gameServerId=${gameServerId}`, {
+                    headers: { 'X-Session-ID': sessionId }
                 });
 
                 if (response.status === 401) {
@@ -424,8 +443,106 @@
                     return;
                 }
 
+                const data = await response.json();
+                const select = document.getElementById('playerId');
+                select.innerHTML = '<option value="">Select a player...</option>';
+
+                if (data.players && data.players.length > 0) {
+                    data.players.forEach(player => {
+                        const option = document.createElement('option');
+                        option.value = player.playerId;
+                        option.textContent = `${player.playerName} (EOS: ${player.steamId.substring(0, 8)}...)`;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load players:', error);
+                const select = document.getElementById('playerId');
+                select.innerHTML = '<option value="">Failed to load players</option>';
+            }
+        }
+
+        document.getElementById('searchType').addEventListener('change', (e) => {
+            const searchType = e.target.value;
+            const locationFields = document.getElementById('locationFields');
+            const playerFields = document.getElementById('playerFields');
+
+            if (searchType === 'location') {
+                locationFields.style.display = 'block';
+                playerFields.style.display = 'none';
+            } else {
+                locationFields.style.display = 'none';
+                playerFields.style.display = 'block';
+                loadPlayers();
+            }
+        });
+
+        document.getElementById('gameServerId').addEventListener('change', () => {
+            const searchType = document.getElementById('searchType').value;
+            if (searchType === 'player') {
+                loadPlayers();
+            }
+        });
+
+        document.getElementById('searchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const searchType = document.getElementById('searchType').value;
+            const gameServerId = document.getElementById('gameServerId').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            try {
+                let response;
+
+                if (searchType === 'location') {
+                    const formData = {
+                        centerX: parseFloat(document.getElementById('centerX').value),
+                        centerZ: parseFloat(document.getElementById('centerZ').value),
+                        radius: parseFloat(document.getElementById('radius').value),
+                        gameServerId: gameServerId,
+                        startDate: startDate,
+                        endDate: endDate
+                    };
+
+                    response = await fetch('/api/search', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-ID': sessionId
+                        },
+                        body: JSON.stringify(formData)
+                    });
+                } else {
+                    const playerId = document.getElementById('playerId').value;
+                    if (!playerId) {
+                        alert('Please select a player');
+                        return;
+                    }
+
+                    const formData = {
+                        playerId: playerId,
+                        startDate: startDate,
+                        endDate: endDate
+                    };
+
+                    response = await fetch('/api/search-by-player', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-ID': sessionId
+                        },
+                        body: JSON.stringify(formData)
+                    });
+                }
+
+                if (response.status === 401) {
+                    logout();
+                    return;
+                }
+
                 const results = await response.json();
-                displayResults(results);
+                displayResults(results, searchType);
             } catch (error) {
                 console.error('Search failed:', error);
                 alert('Search failed. Please try again.');
@@ -435,14 +552,23 @@
         let allResults = [];
         let currentSort = { field: 'timestamp', direction: 'desc' };
 
-        function displayResults(results) {
+        function displayResults(results, searchType) {
             allResults = results && results.inventory ? results.inventory : [];
 
-            // Aggregate duplicate items: sum changes per player+item+location+timewindow
-            const aggregated = aggregateChanges(allResults);
+            let displayData;
+            if (searchType === 'location') {
+                // Aggregate duplicate items: sum changes per player+item+location+timewindow
+                displayData = aggregateChanges(allResults);
+            } else {
+                // For player search, display full inventory snapshot without aggregation
+                displayData = allResults.map(item => ({
+                    ...item,
+                    playerName: results.player.playerName
+                }));
+            }
 
-            sortResults(aggregated, currentSort.field, currentSort.direction);
-            renderFilteredResults(aggregated);
+            sortResults(displayData, currentSort.field, currentSort.direction);
+            renderFilteredResults(displayData);
             document.getElementById('resultsSection').style.display = 'block';
         }
 
