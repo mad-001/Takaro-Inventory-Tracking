@@ -90,7 +90,7 @@
             width: 100%;
             padding: 10px 12px;
             background: #0f0f14;
-            border: 1px solid #2a2a30;
+            border: 1px solid #8b5cf6;
             border-radius: 6px;
             color: #e5e7eb;
             font-size: 14px;
@@ -304,7 +304,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Takaro Inventory Tracker</h1>
+            <h1>Takaro Inventory Tracker <span style="font-size: 0.5em; color: #8b5cf6;">v1.2.0</span></h1>
             <button class="logout-btn" onclick="logout()">Logout</button>
         </div>
 
@@ -345,9 +345,13 @@
 
                 <div id="playerFields" style="display: none;">
                     <div class="form-group">
+                        <label for="playerSearch">Search Player Name</label>
+                        <input type="text" id="playerSearch" name="playerSearch" placeholder="Type player name and press Enter">
+                    </div>
+                    <div class="form-group">
                         <label for="playerId">Select Player</label>
                         <select id="playerId" name="playerId">
-                            <option value="">Select a player...</option>
+                            <option value="">Search for a player first...</option>
                         </select>
                     </div>
                 </div>
@@ -429,12 +433,18 @@
             }
         }
 
-        async function loadPlayers() {
-            const gameServerId = document.getElementById('gameServerId').value;
-            if (!gameServerId) return;
+        async function loadPlayers(searchQuery) {
+            if (!searchQuery || searchQuery.trim().length < 2) {
+                const select = document.getElementById('playerId');
+                select.innerHTML = '<option value="">Enter at least 2 characters...</option>';
+                return;
+            }
 
             try {
-                const response = await fetch(`/api/players?gameServerId=${gameServerId}`, {
+                const select = document.getElementById('playerId');
+                select.innerHTML = '<option value="">Searching...</option>';
+
+                const response = await fetch(`/api/players?search=${encodeURIComponent(searchQuery)}`, {
                     headers: { 'X-Session-ID': sessionId }
                 });
 
@@ -444,16 +454,17 @@
                 }
 
                 const data = await response.json();
-                const select = document.getElementById('playerId');
                 select.innerHTML = '<option value="">Select a player...</option>';
 
                 if (data.players && data.players.length > 0) {
                     data.players.forEach(player => {
                         const option = document.createElement('option');
                         option.value = player.playerId;
-                        option.textContent = `${player.playerName} (EOS: ${player.steamId.substring(0, 8)}...)`;
+                        option.textContent = `${player.playerName} (EOS: ${player.steamId})`;
                         select.appendChild(option);
                     });
+                } else {
+                    select.innerHTML = '<option value="">No players found</option>';
                 }
             } catch (error) {
                 console.error('Failed to load players:', error);
@@ -461,6 +472,14 @@
                 select.innerHTML = '<option value="">Failed to load players</option>';
             }
         }
+
+        document.getElementById('playerSearch').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const searchQuery = e.target.value;
+                loadPlayers(searchQuery);
+            }
+        });
 
         document.getElementById('searchType').addEventListener('change', (e) => {
             const searchType = e.target.value;
@@ -473,14 +492,7 @@
             } else {
                 locationFields.style.display = 'none';
                 playerFields.style.display = 'block';
-                loadPlayers();
-            }
-        });
-
-        document.getElementById('gameServerId').addEventListener('change', () => {
-            const searchType = document.getElementById('searchType').value;
-            if (searchType === 'player') {
-                loadPlayers();
+                document.getElementById('playerSearch').focus();
             }
         });
 
@@ -522,6 +534,7 @@
 
                     const formData = {
                         playerId: playerId,
+                        gameServerId: gameServerId,
                         startDate: startDate,
                         endDate: endDate
                     };

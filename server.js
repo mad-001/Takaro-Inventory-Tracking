@@ -113,10 +113,23 @@ app.get('/api/gameservers', requireAuth, async (req, res) => {
 });
 
 app.get('/api/players', requireAuth, async (req, res) => {
-    const { gameServerId } = req.query;
+    const { search } = req.query;
 
     try {
-        const resp = await axios.get(`${TAKARO_API}/gameserver/${gameServerId}/players`, {
+        const requestBody = {
+            filters: {},
+            sortBy: 'name',
+            sortDirection: 'asc',
+            limit: search ? 100 : 1000
+        };
+
+        if (search && search.trim().length >= 2) {
+            requestBody.search = {
+                name: [search.trim()]
+            };
+        }
+
+        const resp = await axios.post(`${TAKARO_API}/player/search`, requestBody, {
             headers: {
                 'Authorization': `Bearer ${req.takaroToken}`,
                 'Content-Type': 'application/json'
@@ -125,9 +138,9 @@ app.get('/api/players', requireAuth, async (req, res) => {
         });
 
         const players = (resp.data?.data || []).map(player => ({
-            playerId: player.playerId,
-            playerName: player.playerName || 'Unknown',
-            steamId: player.steamId || player.epicOnlineServicesId || ''
+            playerId: player.id,
+            playerName: player.name || 'Unknown',
+            steamId: (player.epicOnlineServicesId || player.steamId || '').replace(/^0+/, '')
         }));
 
         res.json({ players });
@@ -148,11 +161,14 @@ app.post('/api/search-by-player', requireAuth, async (req, res) => {
         });
 
         const playerName = playerResp.data?.data?.name || 'Unknown';
+        const startISO = new Date(startDate).toISOString();
+        const endISO = new Date(endDate).toISOString();
 
+        // Get inventory tracking records
         const inventoryResp = await axios.post(`${TAKARO_API}/tracking/inventory/player`, {
             playerId: playerId,
-            startDate: startDate,
-            endDate: endDate
+            startDate: startISO,
+            endDate: endISO
         }, {
             headers: {
                 'Authorization': `Bearer ${req.takaroToken}`,
@@ -171,26 +187,10 @@ app.post('/api/search-by-player', requireAuth, async (req, res) => {
             });
         }
 
-        const endTime = new Date(endDate).getTime();
-        let closestSnapshot = inventoryData[0];
-        let closestTimeDiff = Math.abs(new Date(inventoryData[0].createdAt).getTime() - endTime);
-
-        for (const snapshot of inventoryData) {
-            const snapTime = new Date(snapshot.createdAt).getTime();
-            const timeDiff = Math.abs(snapTime - endTime);
-            if (timeDiff < closestTimeDiff) {
-                closestTimeDiff = timeDiff;
-                closestSnapshot = snapshot;
-            }
-        }
-
-        const snapshotTime = closestSnapshot.createdAt;
-        const itemsAtTime = inventoryData.filter(item => item.createdAt === snapshotTime);
-
-        const movementResp = await axios.post(`${TAKARO_API}/tracking/player-movement-history`, {
-            playerId: [playerId],
-            startDate: startDate,
-            endDate: endDate,
+        // Get location tracking records (no playerId filter - returns all, we filter below)
+        const locationResp = await axios.post(`${TAKARO_API}/tracking/location`, {
+            startDate: startISO,
+            endDate: endISO,
             limit: 1000
         }, {
             headers: {
@@ -200,32 +200,29 @@ app.post('/api/search-by-player', requireAuth, async (req, res) => {
             timeout: 10000
         });
 
-        const movements = movementResp.data?.data || [];
+        const allLocations = locationResp.data?.data || [];
+        const playerLocations = allLocations.filter(loc => loc.playerId === playerId);
 
-        const inventory = itemsAtTime.map(item => {
-            const itemTime = new Date(item.createdAt).getTime();
-
-            let closestLocation = null;
-            let closestLocDiff = Infinity;
-
-            for (const movement of movements) {
-                const movTime = new Date(movement.createdAt).getTime();
-                const timeDiff = Math.abs(itemTime - movTime);
-                if (timeDiff < closestLocDiff) {
-                    closestLocDiff = timeDiff;
-                    closestLocation = movement;
-                }
+        // Create pogId -> location map
+        const locationByPogId = {};
+        playerLocations.forEach(loc => {
+            if (loc.pogId) {
+                locationByPogId[loc.pogId] = loc;
             }
+        });
 
+        // Map all inventory items with locations
+        const inventory = inventoryData.map(item => {
+            const location = locationByPogId[item.pogId];
             return {
                 itemName: item.itemName || item.itemCode || 'Unknown',
                 itemCode: item.itemCode,
                 quantity: item.quantity,
                 quality: item.quality,
                 timestamp: item.createdAt,
-                x: closestLocation?.x,
-                y: closestLocation?.y,
-                z: closestLocation?.z
+                x: location?.x,
+                y: location?.y,
+                z: location?.z
             };
         });
 
