@@ -2,28 +2,31 @@
 
 ## Project Locations
 
-### Live Directory
+All 4 locations need to be updated when making changes.
+
+### Work File Location
 ```
-\\SERVER\GameServers\Takaro-Inventory-Tracking
+\\wsl.localhost\Ubuntu\home\zmedh\Takaro-Projects\Takaro-Inventory-Tracking
+```
+
+### Server PC Location
+```
+\\wsl.localhost\Ubuntu\home\zmedh\Takaro-Projects\Takaro-Inventory-Tracking
 ```
 
 ### GitHub Repository
 https://github.com/mad-001/Takaro-Inventory-Tracking
 
-### GitHub Pages (Documentation)
+### Releases Page
 https://mad-001.github.io/Takaro-Inventory-Tracking/
-
-## Release Management
-
-A release number needs to be created for versioning.
 
 ## Deployment Workflow
 
-All changes should be pushed to GitHub **after** being tested on the live directory.
+The changes need to be made in the work file and pushed to the server PC. After testing, the release needs to be sent to GitHub and the release page needs to be updated.
 
-### Testing & Deployment Steps:
-1. Test changes in the live directory: `\\SERVER\GameServers\Takaro-Inventory-Tracking`
-2. Verify functionality and stability
-3. Push tested changes to GitHub repository
-4. Update GitHub Pages documentation if needed
-5. Create release tag as appropriate
+### Steps:
+1. **Development**: Make changes in the work file location
+2. **Deploy to Server**: Push changes to the server PC
+3. **Testing**: Test the changes on the server
+4. **Release to GitHub**: Send changes to GitHub repository
+5. **Update Release Page**: Update the releases page

@@ -201,26 +201,28 @@ app.post('/api/search', requireAuth, async (req, res) => {
                 const playerLocations = playersInRadius.filter(p => p.playerId === playerId);
 
                 // Match inventory snapshots to location records by timestamp
+                // Find the most recent location BEFORE the inventory change (where they were)
                 const snapshotsWithLocation = records.map(snapshot => {
                     const snapTime = new Date(snapshot.createdAt).getTime();
 
-                    // Find location record closest in time to this snapshot
-                    let closestLoc = null;
-                    let smallestDiff = Infinity;
+                    // Find the most recent location BEFORE (or at) this inventory change
+                    let locationBefore = null;
+                    let mostRecentTime = -Infinity;
 
                     for (const loc of playerLocations) {
                         const locTime = new Date(loc.createdAt).getTime();
-                        const diff = Math.abs(snapTime - locTime);
-                        if (diff < smallestDiff) {
-                            smallestDiff = diff;
-                            closestLoc = loc;
+
+                        // Only consider locations BEFORE or AT the inventory change
+                        if (locTime <= snapTime && locTime > mostRecentTime) {
+                            mostRecentTime = locTime;
+                            locationBefore = loc;
                         }
                     }
 
                     return {
                         ...snapshot,
-                        location: closestLoc,
-                        timeDiff: smallestDiff
+                        location: locationBefore,
+                        timeDiff: locationBefore ? (snapTime - mostRecentTime) : Infinity
                     };
                 });
 
