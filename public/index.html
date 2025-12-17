@@ -496,6 +496,22 @@
             }
         });
 
+        // Cache for search results
+        const searchCache = new Map();
+        const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+        function getCacheKey(searchType, params) {
+            return `${searchType}:${JSON.stringify(params)}`;
+        }
+
+        function getCachedResults(key) {
+            const cached = searchCache.get(key);
+            if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+                return cached.data;
+            }
+            return null;
+        }
+
         document.getElementById('searchForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -506,6 +522,7 @@
 
             try {
                 let response;
+                let cacheKey;
 
                 if (searchType === 'location') {
                     const formData = {
@@ -516,6 +533,15 @@
                         startDate: startDate,
                         endDate: endDate
                     };
+
+                    cacheKey = getCacheKey('location', formData);
+                    const cachedData = getCachedResults(cacheKey);
+
+                    if (cachedData) {
+                        console.log('Using cached results');
+                        displayResults(cachedData, searchType);
+                        return;
+                    }
 
                     response = await fetch('/api/search', {
                         method: 'POST',
@@ -539,6 +565,15 @@
                         endDate: endDate
                     };
 
+                    cacheKey = getCacheKey('player', formData);
+                    const cachedData = getCachedResults(cacheKey);
+
+                    if (cachedData) {
+                        console.log('Using cached results - no new data since last search');
+                        displayResults(cachedData, searchType);
+                        return;
+                    }
+
                     response = await fetch('/api/search-by-player', {
                         method: 'POST',
                         headers: {
@@ -555,6 +590,13 @@
                 }
 
                 const results = await response.json();
+
+                // Cache the results
+                searchCache.set(cacheKey, {
+                    data: results,
+                    timestamp: Date.now()
+                });
+
                 displayResults(results, searchType);
             } catch (error) {
                 console.error('Search failed:', error);
