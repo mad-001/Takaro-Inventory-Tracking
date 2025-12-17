@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Takaro Inventory Tracker</title>
+    <title>Login - Unofficial Takaro Inventory Tracker</title>
     <style>
         * {
             margin: 0;
@@ -23,90 +23,79 @@
 
         .login-container {
             background: #1a1a1f;
-            border: 1px solid #2a2a30;
-            padding: 40px;
-            border-radius: 8px;
-            max-width: 450px;
+            border: 2px solid transparent;
+            background-image:
+                linear-gradient(#1a1a1f, #1a1a1f),
+                linear-gradient(135deg, #8b5cf6 0%, #5b5ff5 50%, #6366f1 100%);
+            background-origin: border-box;
+            background-clip: padding-box, border-box;
+            padding: 32px;
+            border-radius: 12px;
+            max-width: 400px;
             width: 100%;
+            box-shadow: 0 8px 32px rgba(139, 92, 246, 0.15);
         }
 
         h1 {
-            color: #f3f4f6;
-            margin-bottom: 8px;
+            background: linear-gradient(135deg, #8b5cf6 0%, #5b5ff5 50%, #6366f1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 6px;
             text-align: center;
-            font-size: 24px;
-            font-weight: 600;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
         }
 
         .subtitle {
             color: #9ca3af;
             text-align: center;
-            margin-bottom: 24px;
-            font-size: 14px;
-        }
-
-        .info-box {
-            background: #0f0f14;
-            border: 1px solid #2a2a30;
-            border-radius: 6px;
-            padding: 16px;
-            margin-bottom: 24px;
-        }
-
-        .info-box h3 {
-            color: #8b5cf6;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 10px;
-        }
-
-        .info-box ul {
-            list-style: none;
-            padding-left: 0;
-        }
-
-        .info-box li {
-            color: #9ca3af;
-            font-size: 13px;
-            margin-bottom: 8px;
-            padding-left: 20px;
-            position: relative;
-        }
-
-        .info-box li:before {
-            content: "•";
-            position: absolute;
-            left: 8px;
-            color: #8b5cf6;
+            margin-bottom: 28px;
+            font-size: 12px;
+            line-height: 1.4;
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 18px;
         }
 
         label {
             display: block;
-            margin-bottom: 6px;
-            color: #9ca3af;
-            font-weight: 500;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 600;
             font-size: 13px;
+        }
+
+        .input-wrapper {
+            position: relative;
+            border: 2px solid transparent;
+            background-image:
+                linear-gradient(#0f0f14, #0f0f14),
+                linear-gradient(135deg, #8b5cf6 0%, #5b5ff5 50%, #6366f1 100%);
+            background-origin: border-box;
+            background-clip: padding-box, border-box;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .input-wrapper:focus-within {
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
         }
 
         input {
             width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #2a2a30;
-            background: #0f0f14;
-            color: #e5e7eb;
-            border-radius: 6px;
+            padding: 12px 14px;
+            border: none;
+            background: transparent;
+            color: #f3f4f6;
+            border-radius: 8px;
             font-size: 14px;
-            transition: all 0.2s;
-        }
-
-        input:focus {
             outline: none;
-            border-color: #8b5cf6;
-            background: #13131a;
         }
 
         input::placeholder {
@@ -116,38 +105,40 @@
         button {
             width: 100%;
             padding: 12px;
-            background: #8b5cf6;
+            background: linear-gradient(135deg, #8b5cf6 0%, #5b5ff5 100%);
             color: white;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s ease;
             margin-top: 8px;
         }
 
         button:hover {
-            background: #5b5ff5;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
         }
 
         button:active {
-            transform: scale(0.98);
+            transform: translateY(0);
         }
 
         button:disabled {
-            opacity: 0.5;
+            opacity: 0.6;
             cursor: not-allowed;
+            transform: none;
         }
 
         .error-message {
-            background: #1a1a1f;
+            background: rgba(239, 68, 68, 0.1);
             border: 1px solid #ef4444;
             color: #f87171;
             padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            font-size: 14px;
+            border-radius: 8px;
+            margin-bottom: 18px;
+            font-size: 13px;
             display: none;
         }
 
@@ -155,41 +146,38 @@
             display: none;
             text-align: center;
             color: #9ca3af;
-            font-size: 13px;
-            margin-top: 8px;
+            font-size: 12px;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
     <div class="login-container">
-        <h1>Takaro Inventory Tracker</h1>
-        <p class="subtitle">Sign in with your Takaro credentials</p>
-        
-        <div class="info-box">
-            <h3>Login Options:</h3>
-            <ul>
-                <li><strong>Email + Password:</strong> Your Takaro account credentials</li>
-                <li><strong>Email + API Token:</strong> Enter your Takaro API token in the password field</li>
-                <li><strong>Domain:</strong> Your Takaro domain name (e.g., "my-server-name")</li>
-            </ul>
-        </div>
+        <h1>Unofficial Takaro Inventory Tracker</h1>
+        <p class="subtitle">It is recommended to make a user with readPlayers and readTracking. Root users should NOT use their Takaro Credentials.</p>
 
         <div id="errorMessage" class="error-message"></div>
 
         <form id="loginForm">
             <div class="form-group">
-                <label for="email">Email</label>
-                <input type="email" id="email" name="email" placeholder="your@email.com" required>
+                <label for="email">Takaro Email</label>
+                <div class="input-wrapper">
+                    <input type="email" id="email" name="email" placeholder="your@email.com" required>
+                </div>
             </div>
 
             <div class="form-group">
-                <label for="password">Password / API Token</label>
-                <input type="password" id="password" name="password" placeholder="Enter your password or API token" required>
+                <label for="password">Takaro Password</label>
+                <div class="input-wrapper">
+                    <input type="password" id="password" name="password" placeholder="Enter your password" required>
+                </div>
             </div>
 
             <div class="form-group">
                 <label for="domain">Takaro Domain</label>
-                <input type="text" id="domain" name="domain" placeholder="your-domain-name" required>
+                <div class="input-wrapper">
+                    <input type="text" id="domain" name="domain" placeholder="your-domain-name" required>
+                </div>
             </div>
 
             <button type="submit" id="loginBtn">Sign In</button>
@@ -208,7 +196,6 @@
             const loginBtn = document.getElementById('loginBtn');
             const loadingText = document.getElementById('loadingText');
 
-            // Show loading state
             loginBtn.disabled = true;
             loginBtn.textContent = 'Signing in...';
             loadingText.style.display = 'block';
@@ -222,12 +209,12 @@
                     },
                     body: JSON.stringify({ email, password, domain })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     localStorage.setItem('sessionId', data.sessionId);
-                    loginBtn.textContent = 'Success\! Redirecting...';
+                    loginBtn.textContent = 'Success! Redirecting...';
                     setTimeout(() => {
                         window.location.href = 'index.html';
                     }, 500);
