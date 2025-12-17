@@ -203,26 +203,38 @@ app.post('/api/search-by-player', requireAuth, async (req, res) => {
         const allLocations = locationResp.data?.data || [];
         const playerLocations = allLocations.filter(loc => loc.playerId === playerId);
 
-        // Create pogId -> location map
-        const locationByPogId = {};
-        playerLocations.forEach(loc => {
-            if (loc.pogId) {
-                locationByPogId[loc.pogId] = loc;
-            }
-        });
+        // Sort locations by timestamp for efficient lookup
+        playerLocations.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-        // Map all inventory items with locations
+        // Map all inventory items with locations by finding closest timestamp
         const inventory = inventoryData.map(item => {
-            const location = locationByPogId[item.pogId];
+            const itemTime = new Date(item.createdAt).getTime();
+
+            // Find the most recent location BEFORE or at this inventory change
+            let closestLocation = null;
+            let closestTimeDiff = Infinity;
+
+            for (const loc of playerLocations) {
+                const locTime = new Date(loc.createdAt).getTime();
+                const timeDiff = itemTime - locTime; // Positive if location is before item
+
+                // Only consider locations before or at the inventory change
+                // And within a reasonable time window (e.g., 10 minutes)
+                if (timeDiff >= 0 && timeDiff < closestTimeDiff && timeDiff < 10 * 60 * 1000) {
+                    closestTimeDiff = timeDiff;
+                    closestLocation = loc;
+                }
+            }
+
             return {
                 itemName: item.itemName || item.itemCode || 'Unknown',
                 itemCode: item.itemCode,
                 quantity: item.quantity,
                 quality: item.quality,
                 timestamp: item.createdAt,
-                x: location?.x,
-                y: location?.y,
-                z: location?.z
+                x: closestLocation?.x,
+                y: closestLocation?.y,
+                z: closestLocation?.z
             };
         });
 
