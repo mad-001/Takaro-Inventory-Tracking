@@ -187,8 +187,9 @@ app.post('/api/search-by-player', requireAuth, async (req, res) => {
             });
         }
 
-        // Get location tracking records (no playerId filter - returns all, we filter below)
+        // Get location tracking using pogId - filter by playerId on server side
         const locationResp = await axios.post(`${TAKARO_API}/tracking/location`, {
+            playerId: [playerId],  // Filter by player on server side (array)
             startDate: startISO,
             endDate: endISO,
             limit: 1000
@@ -200,41 +201,28 @@ app.post('/api/search-by-player', requireAuth, async (req, res) => {
             timeout: 10000
         });
 
-        const allLocations = locationResp.data?.data || [];
-        const playerLocations = allLocations.filter(loc => loc.playerId === playerId);
+        const playerLocations = locationResp.data?.data || [];
 
-        // Sort locations by timestamp for efficient lookup
-        playerLocations.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
-        // Map all inventory items with locations by finding closest timestamp
-        const inventory = inventoryData.map(item => {
-            const itemTime = new Date(item.createdAt).getTime();
-
-            // Find the most recent location BEFORE or at this inventory change
-            let closestLocation = null;
-            let closestTimeDiff = Infinity;
-
-            for (const loc of playerLocations) {
-                const locTime = new Date(loc.createdAt).getTime();
-                const timeDiff = itemTime - locTime; // Positive if location is before item
-
-                // Only consider locations before or at the inventory change
-                // And within a reasonable time window (e.g., 10 minutes)
-                if (timeDiff >= 0 && timeDiff < closestTimeDiff && timeDiff < 10 * 60 * 1000) {
-                    closestTimeDiff = timeDiff;
-                    closestLocation = loc;
-                }
+        // Match by pogId (both inventory and location have this field)
+        const locationByPogId = {};
+        playerLocations.forEach(loc => {
+            if (loc.pogId) {
+                locationByPogId[loc.pogId] = loc;
             }
+        });
 
+        // Map inventory items with locations using pogId
+        const inventory = inventoryData.map(item => {
+            const location = locationByPogId[item.pogId];
             return {
                 itemName: item.itemName || item.itemCode || 'Unknown',
                 itemCode: item.itemCode,
                 quantity: item.quantity,
                 quality: item.quality,
                 timestamp: item.createdAt,
-                x: closestLocation?.x,
-                y: closestLocation?.y,
-                z: closestLocation?.z
+                x: location?.x,
+                y: location?.y,
+                z: location?.z
             };
         });
 

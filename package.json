@@ -1,6 +1,6 @@
 {
   "name": "takaro-inventory-tracker",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "Web-based inventory tracking for Takaro game servers",
   "main": "server.js",
   "scripts": {
