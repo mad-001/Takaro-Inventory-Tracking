@@ -187,21 +187,21 @@ app.post('/api/search-by-player', requireAuth, async (req, res) => {
             });
         }
 
-        // Get location tracking records using player-specific endpoint
-        const locationResp = await axios.get(`${TAKARO_API}/tracking/player/${playerId}/location`, {
-            params: {
-                startDate: startISO,
-                endDate: endISO,
-                limit: 10000
-            },
+        // Get location tracking records (no playerId filter - returns all, we filter below)
+        const locationResp = await axios.post(`${TAKARO_API}/tracking/location`, {
+            startDate: startISO,
+            endDate: endISO,
+            limit: 1000
+        }, {
             headers: {
                 'Authorization': `Bearer ${req.takaroToken}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 15000
+            timeout: 10000
         });
 
-        const playerLocations = locationResp.data?.data || [];
+        const allLocations = locationResp.data?.data || [];
+        const playerLocations = allLocations.filter(loc => loc.playerId === playerId);
 
         // Create pogId -> location map
         const locationByPogId = {};
