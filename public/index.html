@@ -527,7 +527,7 @@
         const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
         function getCacheKey(searchType, params) {
-            return `${searchType}:${JSON.stringify(params)}`;
+            return `v2:${searchType}:${JSON.stringify(params)}`; // v2 to invalidate old cache
         }
 
         function getCachedResults(key) {
@@ -695,7 +695,18 @@
         function renderTheftResults(results) {
             const resultsDiv = document.getElementById('results');
 
-            if (!results.success) {
+            // Handle invalid or missing results
+            if (!results || typeof results !== 'object') {
+                resultsDiv.innerHTML = `
+                    <div class="error" style="padding: 16px; background: #1a1a1f; border: 1px solid #ef4444; border-radius: 8px; color: #f87171;">
+                        Invalid response format. Please try searching again.
+                    </div>
+                `;
+                document.getElementById('resultsSection').style.display = 'block';
+                return;
+            }
+
+            if (results.success === false || !results.success) {
                 resultsDiv.innerHTML = `
                     <div class="error" style="padding: 16px; background: #1a1a1f; border: 1px solid #ef4444; border-radius: 8px; color: #f87171;">
                         ${results.message || 'An error occurred'}
