@@ -515,13 +515,9 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
         const startISO = new Date(startDate).toISOString();
         const endISO = new Date(endDate).toISOString();
 
-        // Get all players who were at the location during the time period (10 block radius)
-        const playersResp = await axios.post(`${TAKARO_API}/tracking/location/radius`, {
-            gameserverId: gameServerId,
-            x: x,
-            y: 37,
-            z: z,
-            radius: 10,
+        // Get all players who had this item during the time period (SAME AS MODULE)
+        const playersWithItemResp = await axios.post(`${TAKARO_API}/tracking/item/players`, {
+            itemId: item.id,
             startDate: startISO,
             endDate: endISO
         }, {
@@ -532,16 +528,16 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
             timeout: 30000
         });
 
-        const playersAtLocation = playersResp.data?.data || [];
-        if (playersAtLocation.length === 0) {
+        const playersWithItem = playersWithItemResp.data?.data || [];
+        if (playersWithItem.length === 0) {
             return res.json({
                 success: true,
-                message: `No players found at X:${Math.round(x)} Z:${Math.round(z)} during this time.`
+                message: `No players had "${itemName}" during this time period.`
             });
         }
 
         // Get unique player IDs
-        const uniquePlayerIds = [...new Set(playersAtLocation.map(p => p.playerId))];
+        const uniquePlayerIds = [...new Set(playersWithItem.map(p => p.playerId))];
 
         // Limit to first 20 players to avoid timeouts
         const limitedPlayerIds = uniquePlayerIds.slice(0, 20);
@@ -549,7 +545,7 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
             console.log(`Limiting theft search to first 20 of ${uniquePlayerIds.length} players`);
         }
 
-        // Check all players in parallel
+        // Check all players in parallel - find who GAINED items at the location
         const playerChecks = limitedPlayerIds.map(async (playerId) => {
             try {
                 // Get player name
@@ -561,23 +557,11 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
                 });
                 const playerName = playerResp.data?.data?.name || 'Unknown';
 
-                // Get player's times at the location
-                const playerLocationTimes = playersAtLocation
-                    .filter(p => p.playerId === playerId)
-                    .map(p => new Date(p.createdAt).getTime())
-                    .sort((a, b) => a - b);
-
-                if (playerLocationTimes.length === 0) return null;
-
-                const firstTimeAtLocation = new Date(playerLocationTimes[0]);
-                const lastTimeAtLocation = new Date(playerLocationTimes[playerLocationTimes.length - 1]);
-
-                // Get inventory BEFORE arriving at location (1 minute before)
-                const beforeTime = new Date(firstTimeAtLocation.getTime() - 60000);
-                const inventoryBeforeResp = await axios.post(`${TAKARO_API}/tracking/inventory/player`, {
+                // Get player's inventory for entire time range
+                const inventoryResp = await axios.post(`${TAKARO_API}/tracking/inventory/player`, {
                     playerId: playerId,
-                    startDate: beforeTime.toISOString(),
-                    endDate: firstTimeAtLocation.toISOString()
+                    startDate: startISO,
+                    endDate: endISO
                 }, {
                     headers: {
                         'Authorization': `Bearer ${req.takaroToken}`,
@@ -586,50 +570,37 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
                     timeout: 30000
                 });
 
-                const inventoryBefore = inventoryBeforeResp.data?.data || [];
-                let quantityBefore = 0;
-                for (const record of inventoryBefore) {
-                    if (record.itemId === item.id) {
-                        quantityBefore = Math.max(quantityBefore, record.quantity);
-                    }
-                }
+                const inventoryRecords = inventoryResp.data?.data || [];
 
-                // Get inventory AFTER leaving location (2 minutes after)
-                const afterTime = new Date(lastTimeAtLocation.getTime() + 120000);
-                const inventoryAfterResp = await axios.post(`${TAKARO_API}/tracking/inventory/player`, {
-                    playerId: playerId,
-                    startDate: lastTimeAtLocation.toISOString(),
-                    endDate: afterTime.toISOString()
-                }, {
-                    headers: {
-                        'Authorization': `Bearer ${req.takaroToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    timeout: 30000
+                // Filter records for this item and near the location (10 block radius)
+                const itemRecordsNearLocation = inventoryRecords.filter(record => {
+                    if (record.itemId !== item.id) return false;
+                    if (!record.location) return false;
+
+                    const dx = record.location.x - x;
+                    const dz = record.location.z - z;
+                    const distance = Math.sqrt(dx * dx + dz * dz);
+
+                    return distance <= 10;
                 });
 
-                const inventoryAfter = inventoryAfterResp.data?.data || [];
-                let quantityAfter = 0;
-                let firstSeenAfter = null;
-                for (const record of inventoryAfter) {
-                    if (record.itemId === item.id) {
-                        if (!firstSeenAfter || new Date(record.createdAt) < new Date(firstSeenAfter)) {
-                            firstSeenAfter = record.createdAt;
-                        }
-                        quantityAfter = Math.max(quantityAfter, record.quantity);
-                    }
-                }
+                if (itemRecordsNearLocation.length === 0) return null;
 
-                // Check if player gained items
-                const itemsGained = quantityAfter - quantityBefore;
-                if (itemsGained > 0 && firstSeenAfter) {
-                    const timeDiff = Math.round((new Date(firstSeenAfter) - lastTimeAtLocation) / 1000);
+                // Find first and last quantities
+                itemRecordsNearLocation.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                const firstRecord = itemRecordsNearLocation[0];
+                const lastRecord = itemRecordsNearLocation[itemRecordsNearLocation.length - 1];
+
+                const quantityGained = lastRecord.quantity - firstRecord.quantity;
+
+                if (quantityGained > 0) {
+                    const firstTime = new Date(firstRecord.createdAt);
 
                     return {
-                        message: `🚨 THEFT DETECTED! ${playerName} took ${itemsGained}x ${itemName} from location (${timeDiff}s after visiting at ${lastTimeAtLocation.toLocaleTimeString()})`,
+                        message: `🚨 THEFT DETECTED! ${playerName} took ${quantityGained}x ${itemName} from X:${Math.round(x)} Z:${Math.round(z)} at ${firstTime.toLocaleString()}`,
                         playerName,
-                        itemsGained,
-                        timeDiff
+                        itemsGained: quantityGained,
+                        timestamp: firstTime
                     };
                 }
 
