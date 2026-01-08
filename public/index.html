@@ -693,26 +693,26 @@
         }
 
         function renderTheftResults(results) {
-            const resultsDiv = document.getElementById('results');
+            const resultsSection = document.getElementById('resultsSection');
 
             // Handle invalid or missing results
             if (!results || typeof results !== 'object') {
-                resultsDiv.innerHTML = `
+                resultsSection.innerHTML = `
                     <div class="error" style="padding: 16px; background: #1a1a1f; border: 1px solid #ef4444; border-radius: 8px; color: #f87171;">
                         Invalid response format. Please try searching again.
                     </div>
                 `;
-                document.getElementById('resultsSection').style.display = 'block';
+                resultsSection.style.display = 'block';
                 return;
             }
 
             if (results.success === false || !results.success) {
-                resultsDiv.innerHTML = `
+                resultsSection.innerHTML = `
                     <div class="error" style="padding: 16px; background: #1a1a1f; border: 1px solid #ef4444; border-radius: 8px; color: #f87171;">
                         ${results.message || 'An error occurred'}
                     </div>
                 `;
-                document.getElementById('resultsSection').style.display = 'block';
+                resultsSection.style.display = 'block';
                 return;
             }
 
@@ -740,8 +740,8 @@
             }
 
             html += `</div>`;
-            resultsDiv.innerHTML = html;
-            document.getElementById('resultsSection').style.display = 'block';
+            resultsSection.innerHTML = html;
+            resultsSection.style.display = 'block';
         }
 
         function aggregateChanges(data) {
