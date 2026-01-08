@@ -542,17 +542,22 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
 
         // Get unique player IDs
         const uniquePlayerIds = [...new Set(playersAtLocation.map(p => p.playerId))];
-        const results = [];
 
-        // Check each player for inventory gains
-        for (const playerId of uniquePlayerIds) {
+        // Limit to first 20 players to avoid timeouts
+        const limitedPlayerIds = uniquePlayerIds.slice(0, 20);
+        if (uniquePlayerIds.length > 20) {
+            console.log(`Limiting theft search to first 20 of ${uniquePlayerIds.length} players`);
+        }
+
+        // Check all players in parallel
+        const playerChecks = limitedPlayerIds.map(async (playerId) => {
             try {
                 // Get player name
                 const playerResp = await axios.get(`${TAKARO_API}/player/${playerId}`, {
                     headers: {
                         'Authorization': `Bearer ${req.takaroToken}`
                     },
-                    timeout: 5000
+                    timeout: 10000
                 });
                 const playerName = playerResp.data?.data?.name || 'Unknown';
 
@@ -562,7 +567,7 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
                     .map(p => new Date(p.createdAt).getTime())
                     .sort((a, b) => a - b);
 
-                if (playerLocationTimes.length === 0) continue;
+                if (playerLocationTimes.length === 0) return null;
 
                 const firstTimeAtLocation = new Date(playerLocationTimes[0]);
                 const lastTimeAtLocation = new Date(playerLocationTimes[playerLocationTimes.length - 1]);
@@ -578,7 +583,7 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
                         'Authorization': `Bearer ${req.takaroToken}`,
                         'Content-Type': 'application/json'
                     },
-                    timeout: 15000
+                    timeout: 30000
                 });
 
                 const inventoryBefore = inventoryBeforeResp.data?.data || [];
@@ -600,7 +605,7 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
                         'Authorization': `Bearer ${req.takaroToken}`,
                         'Content-Type': 'application/json'
                     },
-                    timeout: 15000
+                    timeout: 30000
                 });
 
                 const inventoryAfter = inventoryAfterResp.data?.data || [];
@@ -620,18 +625,25 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
                 if (itemsGained > 0 && firstSeenAfter) {
                     const timeDiff = Math.round((new Date(firstSeenAfter) - lastTimeAtLocation) / 1000);
 
-                    results.push({
+                    return {
                         message: `🚨 THEFT DETECTED! ${playerName} took ${itemsGained}x ${itemName} from location (${timeDiff}s after visiting at ${lastTimeAtLocation.toLocaleTimeString()})`,
                         playerName,
                         itemsGained,
                         timeDiff
-                    });
+                    };
                 }
+
+                return null;
 
             } catch (playerErr) {
                 console.error(`Failed to check player ${playerId}:`, playerErr.message);
+                return null;
             }
-        }
+        });
+
+        // Wait for all player checks to complete
+        const allResults = await Promise.all(playerChecks);
+        const results = allResults.filter(r => r !== null);
 
         // Sort by items gained (descending)
         results.sort((a, b) => b.itemsGained - a.itemsGained);
