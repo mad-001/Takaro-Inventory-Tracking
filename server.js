@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const axios = require('axios');
 const path = require('path');
 const cors = require('cors');
@@ -515,8 +515,8 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
         const startISO = new Date(startDate).toISOString();
         const endISO = new Date(endDate).toISOString();
 
-        // Get all players who had this item during the time period (SAME AS MODULE)
-        const playersWithItemResp = await axios.post(`${TAKARO_API}/tracking/item/players`, {
+        // Step 1: Get all players who had the item (SAME AS /whostole MODULE)
+        const playersWithItemResp = await axios.post(`${TAKARO_API}/tracking/inventory/item`, {
             itemId: item.id,
             startDate: startISO,
             endDate: endISO
@@ -529,6 +529,8 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
         });
 
         const playersWithItem = playersWithItemResp.data?.data || [];
+        console.log(`Found ${playersWithItem.length} players with item`);
+
         if (playersWithItem.length === 0) {
             return res.json({
                 success: true,
@@ -536,78 +538,70 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
             });
         }
 
-        // Get unique player IDs
-        const uniquePlayerIds = [...new Set(playersWithItem.map(p => p.playerId))];
+        const playerIds = [...new Set(playersWithItem.map(p => p.playerId))];
 
-        // Limit to first 20 players to avoid timeouts
-        const limitedPlayerIds = uniquePlayerIds.slice(0, 20);
-        if (uniquePlayerIds.length > 20) {
-            console.log(`Limiting theft search to first 20 of ${uniquePlayerIds.length} players`);
-        }
-
-        // Check all players in parallel - find who GAINED items at the location
-        const playerChecks = limitedPlayerIds.map(async (playerId) => {
+        // Step 2: Check which ones were at the location
+        const playerChecks = playerIds.map(async (playerId) => {
             try {
-                // Get player name
-                const playerResp = await axios.get(`${TAKARO_API}/player/${playerId}`, {
-                    headers: {
-                        'Authorization': `Bearer ${req.takaroToken}`
-                    },
-                    timeout: 10000
-                });
+                const [playerResp, movementResp, inventoryResp] = await Promise.all([
+                    axios.get(`${TAKARO_API}/player/${playerId}`, {
+                        headers: { 'Authorization': `Bearer ${req.takaroToken}` },
+                        timeout: 10000
+                    }),
+                    axios.post(`${TAKARO_API}/tracking/location`, {
+                        playerId: [playerId],
+                        startDate: startISO,
+                        endDate: endISO,
+                        limit: 1000
+                    }, {
+                        headers: {
+                            'Authorization': `Bearer ${req.takaroToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 30000
+                    }),
+                    axios.post(`${TAKARO_API}/tracking/inventory/player`, {
+                        playerId: playerId,
+                        startDate: startISO,
+                        endDate: endISO
+                    }, {
+                        headers: {
+                            'Authorization': `Bearer ${req.takaroToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 30000
+                    })
+                ]);
+
                 const playerName = playerResp.data?.data?.name || 'Unknown';
+                const movements = movementResp.data?.data || [];
 
-                // Get player's inventory for entire time range
-                const inventoryResp = await axios.post(`${TAKARO_API}/tracking/inventory/player`, {
-                    playerId: playerId,
-                    startDate: startISO,
-                    endDate: endISO
-                }, {
-                    headers: {
-                        'Authorization': `Bearer ${req.takaroToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    timeout: 30000
+                // Find times when player was at location (50 block radius)
+                const movementsAtLocation = movements.filter(m => {
+                    const dx = m.x - x;
+                    const dz = m.z - z;
+                    return Math.sqrt(dx * dx + dz * dz) <= 50;
                 });
 
-                const inventoryRecords = inventoryResp.data?.data || [];
+                if (movementsAtLocation.length === 0) return null;
 
-                // Filter records for this item and near the location (10 block radius)
-                const itemRecordsNearLocation = inventoryRecords.filter(record => {
-                    if (record.itemId !== item.id) return false;
-                    if (!record.location) return false;
+                // Get inventory records for the item during this time period
+                const inventoryRecords = (inventoryResp.data?.data || []).filter(r => r.itemId === item.id);
+                if (inventoryRecords.length === 0) return null;
 
-                    const dx = record.location.x - x;
-                    const dz = record.location.z - z;
-                    const distance = Math.sqrt(dx * dx + dz * dz);
+                // Simple: they were at the location, show max quantity they had during the time range
+                const maxQty = Math.max(...inventoryRecords.map(r => r.quantity));
+                const maxRecord = inventoryRecords.find(r => r.quantity === maxQty);
 
-                    return distance <= 10;
-                });
+                return {
+                    message: `${playerName} had up to ${maxQty}x ${itemName} at X:${Math.round(x)} Z:${Math.round(z)}`,
+                    playerName,
+                    itemsChanged: maxQty,
+                    timestamp: new Date(maxRecord.createdAt)
+                };
 
-                if (itemRecordsNearLocation.length === 0) return null;
-
-                // Find first and last quantities
-                itemRecordsNearLocation.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-                const firstRecord = itemRecordsNearLocation[0];
-                const lastRecord = itemRecordsNearLocation[itemRecordsNearLocation.length - 1];
-
-                const quantityGained = lastRecord.quantity - firstRecord.quantity;
-
-                if (quantityGained > 0) {
-                    const firstTime = new Date(firstRecord.createdAt);
-
-                    return {
-                        message: `🚨 THEFT DETECTED! ${playerName} took ${quantityGained}x ${itemName} from X:${Math.round(x)} Z:${Math.round(z)} at ${firstTime.toLocaleString()}`,
-                        playerName,
-                        itemsGained: quantityGained,
-                        timestamp: firstTime
-                    };
-                }
-
-                return null;
-
-            } catch (playerErr) {
-                console.error(`Failed to check player ${playerId}:`, playerErr.message);
+            } catch (err) {
+                console.error(`Failed to check player ${playerId}:`, err.message);
                 return null;
             }
         });
@@ -616,8 +610,8 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
         const allResults = await Promise.all(playerChecks);
         const results = allResults.filter(r => r !== null);
 
-        // Sort by items gained (descending)
-        results.sort((a, b) => b.itemsGained - a.itemsGained);
+        // Sort by absolute item change (descending)
+        results.sort((a, b) => Math.abs(b.itemsChanged) - Math.abs(a.itemsChanged));
 
         if (results.length > 0) {
             res.json({
@@ -627,15 +621,22 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
         } else {
             res.json({
                 success: true,
-                message: `No thefts of "${itemName}" detected at X:${Math.round(x)} Z:${Math.round(z)} during the time period.`
+                message: `No inventory changes for "${itemName}" at X:${Math.round(x)} Z:${Math.round(z)} during the time period.`
             });
         }
 
     } catch (error) {
         console.error('Theft search error:', error.message);
+        console.error('Error details:', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            url: error.config?.url
+        });
         res.status(500).json({
             success: false,
-            message: error.message || 'Failed to search for thefts'
+            message: error.message || 'Failed to search for thefts',
+            details: error.response?.data
         });
     }
 });
