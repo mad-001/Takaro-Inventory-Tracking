@@ -75,6 +75,7 @@ app.post('/api/login', async (req, res) => {
         const sessionId = Math.random().toString(36).substring(7);
         sessions.set(sessionId, {
             takaroToken: takaroToken,
+            domain: domain,
             loginTime: Date.now()
         });
 
@@ -100,6 +101,7 @@ app.get('/api/gameservers', requireAuth, async (req, res) => {
         }, {
             headers: {
                 'Authorization': `Bearer ${req.takaroToken}`,
+                'x-takaro-domain': req.sessionData.domain,
                 'Content-Type': 'application/json'
             },
             timeout: 10000
@@ -132,6 +134,7 @@ app.get('/api/players', requireAuth, async (req, res) => {
         const resp = await axios.post(`${TAKARO_API}/player/search`, requestBody, {
             headers: {
                 'Authorization': `Bearer ${req.takaroToken}`,
+                'x-takaro-domain': req.sessionData.domain,
                 'Content-Type': 'application/json'
             },
             timeout: 10000
@@ -155,7 +158,8 @@ app.post('/api/search-by-player', requireAuth, async (req, res) => {
     try {
         const playerResp = await axios.get(`${TAKARO_API}/player/${playerId}`, {
             headers: {
-                'Authorization': `Bearer ${req.takaroToken}`
+                'Authorization': `Bearer ${req.takaroToken}`,
+                'x-takaro-domain': req.sessionData.domain
             },
             timeout: 5000
         });
@@ -172,6 +176,7 @@ app.post('/api/search-by-player', requireAuth, async (req, res) => {
         }, {
             headers: {
                 'Authorization': `Bearer ${req.takaroToken}`,
+                'x-takaro-domain': req.sessionData.domain,
                 'Content-Type': 'application/json'
             },
             timeout: 30000
@@ -195,6 +200,7 @@ app.post('/api/search-by-player', requireAuth, async (req, res) => {
         }, {
             headers: {
                 'Authorization': `Bearer ${req.takaroToken}`,
+                'x-takaro-domain': req.sessionData.domain,
                 'Content-Type': 'application/json'
             },
             timeout: 10000
@@ -295,6 +301,7 @@ app.post('/api/search', requireAuth, async (req, res) => {
         }, {
             headers: {
                 'Authorization': `Bearer ${req.takaroToken}`,
+                'x-takaro-domain': req.sessionData.domain,
                 'Content-Type': 'application/json'
             },
             timeout: 30000
@@ -323,7 +330,8 @@ app.post('/api/search', requireAuth, async (req, res) => {
 
                 const playerResp = await axios.get(`${TAKARO_API}/player/${playerId}`, {
                     headers: {
-                        'Authorization': `Bearer ${req.takaroToken}`
+                        'Authorization': `Bearer ${req.takaroToken}`,
+                        'x-takaro-domain': req.sessionData.domain
                     },
                     timeout: 5000
                 });
@@ -333,6 +341,7 @@ app.post('/api/search', requireAuth, async (req, res) => {
 
                 const records = await getInventoryChunked(
                     req.takaroToken,
+                    req.sessionData.domain,
                     playerId,
                     startDate,
                     endDate
@@ -461,7 +470,7 @@ app.post('/api/search', requireAuth, async (req, res) => {
     }
 });
 
-async function getInventoryChunked(token, playerId, startDate, endDate) {
+async function getInventoryChunked(token, domain, playerId, startDate, endDate) {
     try {
         const startISO = new Date(startDate).toISOString();
         const endISO = new Date(endDate).toISOString();
@@ -473,6 +482,7 @@ async function getInventoryChunked(token, playerId, startDate, endDate) {
         }, {
             headers: {
                 'Authorization': `Bearer ${token}`,
+                'x-takaro-domain': domain,
                 'Content-Type': 'application/json'
             },
             timeout: 30000
@@ -498,6 +508,7 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
         }, {
             headers: {
                 'Authorization': `Bearer ${req.takaroToken}`,
+                'x-takaro-domain': req.sessionData.domain,
                 'Content-Type': 'application/json'
             },
             timeout: 10000
@@ -523,6 +534,7 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
         }, {
             headers: {
                 'Authorization': `Bearer ${req.takaroToken}`,
+                'x-takaro-domain': req.sessionData.domain,
                 'Content-Type': 'application/json'
             },
             timeout: 30000
@@ -545,7 +557,10 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
             try {
                 const [playerResp, movementResp, inventoryResp] = await Promise.all([
                     axios.get(`${TAKARO_API}/player/${playerId}`, {
-                        headers: { 'Authorization': `Bearer ${req.takaroToken}` },
+                        headers: {
+                            'Authorization': `Bearer ${req.takaroToken}`,
+                            'x-takaro-domain': req.sessionData.domain
+                        },
                         timeout: 10000
                     }),
                     axios.post(`${TAKARO_API}/tracking/location`, {
@@ -556,6 +571,7 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
                     }, {
                         headers: {
                             'Authorization': `Bearer ${req.takaroToken}`,
+                            'x-takaro-domain': req.sessionData.domain,
                             'Content-Type': 'application/json'
                         },
                         timeout: 30000
@@ -567,6 +583,7 @@ app.post('/api/search-theft', requireAuth, async (req, res) => {
                     }, {
                         headers: {
                             'Authorization': `Bearer ${req.takaroToken}`,
+                            'x-takaro-domain': req.sessionData.domain,
                             'Content-Type': 'application/json'
                         },
                         timeout: 30000
