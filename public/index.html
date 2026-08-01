@@ -304,7 +304,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Takaro Inventory Tracker <span style="font-size: 0.5em; color: #8b5cf6;">v1.5.3</span></h1>
+            <h1>Takaro Inventory Tracker <span style="font-size: 0.5em; color: #8b5cf6;">v1.6.3</span></h1>
             <button class="logout-btn" onclick="logout()">Logout</button>
         </div>
 
@@ -331,15 +331,15 @@
                     <div class="form-group coordinate-group">
                         <div>
                             <label for="centerX">X Coordinate</label>
-                            <input type="number" id="centerX" name="centerX">
+                            <input type="text" inputmode="text" pattern="-?[0-9]*\.?[0-9]*" id="centerX" name="centerX">
                         </div>
                         <div>
                             <label for="centerZ">Z Coordinate</label>
-                            <input type="number" id="centerZ" name="centerZ">
+                            <input type="text" inputmode="text" pattern="-?[0-9]*\.?[0-9]*" id="centerZ" name="centerZ">
                         </div>
                         <div>
                             <label for="radius">Radius</label>
-                            <input type="number" id="radius" name="radius">
+                            <input type="number" id="radius" name="radius" min="1" step="any">
                         </div>
                     </div>
                 </div>
@@ -365,11 +365,11 @@
                     <div class="form-group coordinate-group">
                         <div>
                             <label for="theftX">X Coordinate</label>
-                            <input type="number" id="theftX" name="theftX">
+                            <input type="text" inputmode="text" pattern="-?[0-9]*\.?[0-9]*" id="theftX" name="theftX">
                         </div>
                         <div>
                             <label for="theftZ">Z Coordinate</label>
-                            <input type="number" id="theftZ" name="theftZ">
+                            <input type="text" inputmode="text" pattern="-?[0-9]*\.?[0-9]*" id="theftZ" name="theftZ">
                         </div>
                     </div>
                 </div>
@@ -538,13 +538,42 @@
             return null;
         }
 
+        function showSearchError(message) {
+            const tbody = document.querySelector('#resultsTable tbody');
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #f87171;">${message}</td></tr>`;
+            }
+            document.getElementById('resultsSection').style.display = 'block';
+        }
+
         document.getElementById('searchForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const searchType = document.getElementById('searchType').value;
             const gameServerId = document.getElementById('gameServerId').value;
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
+
+            // The datetime-local fields are local wall time. Convert here, in the
+            // browser, so the window doesn't shift if the server runs in a
+            // different timezone than the person searching.
+            const startLocal = new Date(document.getElementById('startDate').value);
+            const endLocal = new Date(document.getElementById('endDate').value);
+
+            if (isNaN(startLocal) || isNaN(endLocal)) {
+                showSearchError('Please enter a valid start and end date.');
+                return;
+            }
+            if (startLocal >= endLocal) {
+                showSearchError('Start date must be before end date.');
+                return;
+            }
+
+            const startDate = startLocal.toISOString();
+            const endDate = endLocal.toISOString();
+
+            const submitBtn = document.querySelector('.submit-btn');
+            const originalBtnText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Searching...';
 
             try {
                 let response;
@@ -559,6 +588,11 @@
                         startDate: startDate,
                         endDate: endDate
                     };
+
+                    if (![formData.centerX, formData.centerZ, formData.radius].every(Number.isFinite)) {
+                        showSearchError('X, Z and radius must all be numbers.');
+                        return;
+                    }
 
                     cacheKey = getCacheKey('location', formData);
                     const cachedData = getCachedResults(cacheKey);
@@ -624,6 +658,11 @@
                         endDate: endDate
                     };
 
+                    if (![formData.x, formData.z].every(Number.isFinite)) {
+                        showSearchError('Theft detection X and Z must both be numbers.');
+                        return;
+                    }
+
                     cacheKey = getCacheKey('theft', formData);
                     const cachedData = getCachedResults(cacheKey);
 
@@ -650,6 +689,11 @@
 
                 const results = await response.json();
 
+                if (!response.ok) {
+                    showSearchError(results.error || results.message || `Search failed (HTTP ${response.status})`);
+                    return;
+                }
+
                 // Cache the results
                 searchCache.set(cacheKey, {
                     data: results,
@@ -659,7 +703,10 @@
                 displayResults(results, searchType);
             } catch (error) {
                 console.error('Search failed:', error);
-                alert('Search failed. Please try again.');
+                showSearchError(`Search failed: ${error.message}`);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalBtnText;
             }
         });
 
@@ -689,6 +736,17 @@
 
             sortResults(displayData, currentSort.field, currentSort.direction);
             renderFilteredResults(displayData);
+
+            const existingNote = document.getElementById('truncationNote');
+            if (existingNote) existingNote.remove();
+            if (results && results.truncated) {
+                const note = document.createElement('div');
+                note.id = 'truncationNote';
+                note.style.cssText = 'padding: 8px 0; color: #fbbf24; font-size: 0.9em;';
+                note.textContent = `Showing the first 25 players in this area; ${results.truncated} more were not searched. Narrow the radius or time range for full coverage.`;
+                document.querySelector('.search-filter').before(note);
+            }
+
             document.getElementById('resultsSection').style.display = 'block';
         }
 
@@ -897,10 +955,18 @@
 
         loadGameServers();
 
+        // datetime-local expects LOCAL wall time. toISOString() is UTC, which
+        // shifts both fields by the browser's offset, so format locally instead.
+        function toLocalInputValue(date) {
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+                   `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        }
+
         const now = new Date();
-        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 1000);
-        document.getElementById('startDate').value = oneWeekAgo.toISOString().slice(0, 16);
-        document.getElementById('endDate').value = now.toISOString().slice(0, 16);
+        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        document.getElementById('startDate').value = toLocalInputValue(oneWeekAgo);
+        document.getElementById('endDate').value = toLocalInputValue(now);
     </script>
 </body>
 </html>

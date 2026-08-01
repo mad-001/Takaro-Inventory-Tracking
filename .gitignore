@@ -1,5 +1,11 @@
 ﻿# Configuration (contains sensitive data)
 config.json
+.env
+
+# Ad-hoc debug scripts - these hardcode Takaro login credentials, never commit
+find_duplicates.js
+export_duplicates.js
+check_oscillation.js
 
 # Logs
 debug.log

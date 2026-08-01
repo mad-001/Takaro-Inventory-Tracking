@@ -5,5 +5,14 @@
   "_port_description": "The port number the server will listen on. Default: 5555",
 
   "takaroApi": "https://api.takaro.io",
-  "_takaroApi_description": "The Takaro API endpoint. Should not need to change unless Takaro updates their API URL."
+  "_takaroApi_description": "The Takaro API endpoint. Should not need to change unless Takaro updates their API URL.",
+
+  "locationToleranceSeconds": 300,
+  "_locationToleranceSeconds_description": "How close in time an inventory change must be to a position ping inside the search circle to count as happening there. Takaro samples position every ~30-100s, so some slack is required. Lower = stricter (fewer false hits, may miss real ones). Higher = looser. Default: 300 (5 minutes).",
+
+  "theftRadius": 50,
+  "_theftRadius_description": "Theft Detection has no radius field in the UI. This is how close to the entered coordinates a pickup must happen to be reported. Default: 50 blocks.",
+
+  "historyLookbackDays": 7,
+  "_historyLookbackDays_description": "Takaro only stores a row while an item is IN a player's inventory - a loss is recorded as an absence, never a quantity of 0. So an item appearing for the first time is a real pickup (0 -> N). This is how far back before your search window to read in order to tell 'brand new' from 'had it all along'. Default: 7 days."
 }
