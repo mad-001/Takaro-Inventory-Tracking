@@ -160,8 +160,8 @@
 
         <div class="download-section">
             <h2 style="color: #a855f7; margin-bottom: 15px;">Download Latest Version</h2>
-            <p style="margin-bottom: 15px;">Current Version: <strong style="color: #6366f1;">v1.2.0</strong></p>
-            <a href="https://github.com/mad-001/Takaro-Inventory-Tracking/archive/refs/tags/v1.2.0.zip" class="download-btn">Download v1.2.0</a>
+            <p style="margin-bottom: 15px;">Current Version: <strong style="color: #6366f1;" data-latest-version>latest</strong></p>
+            <a href="https://github.com/mad-001/Takaro-Inventory-Tracking/releases/latest" class="download-btn">Download <span data-latest-version>Latest</span></a>
             <a href="https://github.com/mad-001/Takaro-Inventory-Tracking" class="download-btn" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);">View on GitHub</a>
         </div>
 
@@ -301,5 +301,15 @@
             </p>
         </div>
     </div>
+<script>
+    // Fill in the latest release tag so this page never goes stale.
+    fetch('https://api.github.com/repos/mad-001/Takaro-Inventory-Tracking/releases/latest')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (rel) {
+            if (!rel || !rel.tag_name) return;
+            document.querySelectorAll('[data-latest-version]').forEach(function (el) { el.textContent = rel.tag_name; });
+        })
+        .catch(function () {});
+    </script>
 </body>
 </html>
